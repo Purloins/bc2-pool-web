@@ -1,49 +1,359 @@
-import crypto from "crypto";
-import { redis } from "./redis.js";
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mappool</title>
+<style>
+  * { box-sizing: border-box; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background: #1a1a1e; color: #e8e8ea; line-height: 1.45; }
+  header { background: #232329; padding: 12px 16px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid #34343c; }
+  header h1 { font-size: 18px; margin: 0; margin-right: auto; }
+  .tabs { display: flex; gap: 4px; }
+  .tabs button { background: #34343c; color: #e8e8ea; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 14px; }
+  .tabs button.active { background: #e0457b; }
+  .user { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .user img { width: 28px; height: 28px; border-radius: 50%; }
+  .pill { font-size: 11px; background: #34343c; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; }
+  main { padding: 16px; max-width: 1000px; margin: 0 auto; }
+  input, select { background: #2a2a30; color: #e8e8ea; border: 1px solid #44444c; border-radius: 5px; padding: 6px 8px; font-size: 13px; }
+  label { font-size: 12px; color: #a0a0a8; display: block; margin-bottom: 3px; }
+  .btn { background: #e0457b; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 14px; text-decoration: none; display: inline-block; }
+  .btn.secondary { background: #34343c; } .btn.danger { background: #7a2a2a; }
+  .btn:hover { opacity: .9; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; }
+  .field { display: flex; flex-direction: column; }
+  .round-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+  .round-bar button { background: #2a2a30; color: #e8e8ea; border: 1px solid #44444c; padding: 7px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
+  .round-bar button.active { background: #e0457b; border-color: #e0457b; }
+  .mod-group { margin-bottom: 22px; }
+  .mod-header { font-size: 15px; font-weight: 600; margin: 0 0 8px; padding-left: 8px; border-left: 4px solid #e0457b; }
+  .slot { display: flex; gap: 12px; background: #232329; border: 1px solid #34343c; border-radius: 8px; padding: 10px; margin-bottom: 8px; align-items: center; }
+  .slot .cover { width: 120px; height: 67px; border-radius: 5px; object-fit: cover; background: #34343c; flex-shrink: 0; }
+  .slot .badge { flex-shrink: 0; width: 48px; text-align: center; font-weight: 700; font-size: 13px; padding: 6px 0; border-radius: 5px; color: #fff; }
+  .slot .info { flex: 1; min-width: 0; }
+  .slot .info .title { font-weight: 600; font-size: 15px; }
+  .slot .info .title a { color: #e8e8ea; text-decoration: none; }
+  .slot .info .sub { font-size: 12px; color: #a0a0a8; }
+  .slot .stats { font-size: 12px; color: #c8c8d0; margin-top: 4px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .slot .stats b { color: #e0457b; }
+  .skills { margin-top: 4px; display: flex; gap: 5px; flex-wrap: wrap; }
+  .skill-tag { background: #34343c; font-size: 11px; padding: 2px 7px; border-radius: 10px; }
+  .NM { background: #4a8fe0; } .HD { background: #d8b73c; } .HR { background: #e05050; }
+  .DT { background: #9050e0; } .FM { background: #46b06a; } .TB { background: #888; }
+  .EZ { background: #46b0a0; } .FL { background: #555; }
+  table.builder { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.builder th, table.builder td { border: 1px solid #34343c; padding: 5px; }
+  table.builder th { background: #2a2a30; }
+  table.builder input { width: 100%; min-width: 55px; }
+  .card { background: #232329; border: 1px solid #34343c; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
+  .muted { color: #a0a0a8; font-size: 12px; }
+  .empty { color: #a0a0a8; padding: 30px; text-align: center; }
+  .save-state { font-size: 12px; color: #46b06a; }
+  @media (max-width: 640px) { .slot { flex-wrap: wrap; } .slot .cover { width: 100%; height: auto; } }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="tname">Mappool</h1>
+  <div class="tabs" id="tabs"></div>
+  <div class="user" id="userbox"></div>
+</header>
+<main id="app"><div class="empty">Loading…</div></main>
 
-const SESSION_TTL = 60 * 60 * 24 * 30; // 30 days (seconds)
+<script>
+const MODS = ["NM","HD","HR","DT","FM","TB","EZ","FL"];
+let me = null;          // {id, username, avatar_url, role}
+let pool = { name: "Mappool", rounds: [] };
+let view = "viewer";
+let activeRound = null;
+let saveTimer = null;
 
-export function parseCookies(req) {
-  const header = req.headers.cookie || "";
-  const out = {};
-  header.split(";").forEach((c) => {
-    const i = c.indexOf("=");
-    if (i === -1) return;
-    out[c.slice(0, i).trim()] = decodeURIComponent(c.slice(i + 1).trim());
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const uid = () => Math.random().toString(36).slice(2, 9);
+
+function parseOsu(url) {
+  let setId = null, mapId = null, m;
+  if ((m = url.match(/beatmapsets\/(\d+)(?:#\w+\/(\d+))?/))) { setId = m[1]; mapId = m[2] || null; }
+  else if ((m = url.match(/\/b\/(\d+)|beatmaps\/(\d+)/))) { mapId = m[1] || m[2]; }
+  return { beatmapsetId: setId, beatmapId: mapId };
+}
+const cover = id => id ? `https://assets.ppy.sh/beatmaps/${id}/covers/cover.jpg` : "";
+function mapLink(s) {
+  if (s.beatmapsetId && s.beatmapId) return `https://osu.ppy.sh/beatmapsets/${s.beatmapsetId}#osu/${s.beatmapId}`;
+  if (s.beatmapId) return `https://osu.ppy.sh/beatmaps/${s.beatmapId}`;
+  if (s.beatmapsetId) return `https://osu.ppy.sh/beatmapsets/${s.beatmapsetId}`;
+  return "#";
+}
+
+async function api(path, opts) {
+  const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
+  if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error || res.status); }
+  return res.json();
+}
+
+async function init() {
+  try { me = (await api("/api/me")).user; } catch (e) { me = null; }
+  try { pool = (await api("/api/pool")).pool; } catch (e) {}
+  if (!activeRound) activeRound = pool.rounds[0]?.id || null;
+  render();
+}
+
+function isHost() { return me && me.role === "host"; }
+function canSuggest() { return me && (me.role === "host" || me.role === "mappooler"); }
+
+function render() {
+  document.getElementById("tname").textContent = pool.name || "Mappool";
+  // user box
+  const ub = document.getElementById("userbox");
+  if (me) {
+    ub.innerHTML = `<img src="${esc(me.avatar_url||"")}" alt=""><span>${esc(me.username)}</span>
+      <span class="pill">${esc(me.role)}</span>
+      <a class="btn secondary" href="/api/auth/logout">Logout</a>`;
+  } else {
+    ub.innerHTML = `<a class="btn" href="/api/auth/login">Login with osu!</a>`;
+  }
+  // tabs
+  const tabs = [["viewer","Viewer"]];
+  if (canSuggest()) tabs.push(["suggest","Suggestions"]);
+  if (isHost()) { tabs.push(["builder","Builder"]); tabs.push(["admin","Admin"]); }
+  if (!tabs.find(t => t[0] === view)) view = "viewer";
+  document.getElementById("tabs").innerHTML = tabs.map(([k,l]) =>
+    `<button class="${k===view?'active':''}" onclick="view='${k}';render()">${l}</button>`).join("");
+
+  ({ viewer: renderViewer, builder: renderBuilder, suggest: renderSuggest, admin: renderAdmin }[view])();
+}
+
+/* ---------- VIEWER (public) ---------- */
+function renderViewer() {
+  const app = document.getElementById("app");
+  if (!pool.rounds.length) { app.innerHTML = `<div class="empty">No rounds yet.</div>`; return; }
+  const round = pool.rounds.find(r => r.id === activeRound) || pool.rounds[0];
+  activeRound = round.id;
+  let html = roundBar(round, "activeRound");
+  if (round.mappackUrl) html += `<p><a class="btn" href="${esc(round.mappackUrl)}" target="_blank" rel="noopener">⬇ Download Mappack</a></p>`;
+  const slots = round.slots || [];
+  if (!slots.length) { app.innerHTML = html + `<div class="empty">No maps in ${esc(round.name)} yet.</div>`; return; }
+  const order = m => { const i = MODS.indexOf(m); return i === -1 ? 99 : i; };
+  const groups = {};
+  slots.forEach(s => (groups[s.mod] = groups[s.mod] || []).push(s));
+  Object.keys(groups).sort((a,b)=>order(a)-order(b)).forEach(mod => {
+    html += `<div class="mod-group"><div class="mod-header">${esc(mod)}</div>`;
+    groups[mod].forEach(s => {
+      const stats = [];
+      if (s.stars)  stats.push(`<b>${esc(s.stars)}★</b>`);
+      if (s.bpm)    stats.push(`${esc(s.bpm)} BPM`);
+      if (s.length) stats.push(esc(s.length));
+      if (s.cs)     stats.push(`CS ${esc(s.cs)}`);
+      if (s.ar)     stats.push(`AR ${esc(s.ar)}`);
+      if (s.od)     stats.push(`OD ${esc(s.od)}`);
+      const skills = (s.skills||"").split(",").map(x=>x.trim()).filter(Boolean);
+      html += `<div class="slot">
+        <span class="badge ${esc(s.mod)}">${esc(s.mod)}${esc(s.index||"")}</span>
+        <img class="cover" src="${cover(s.beatmapsetId)}" onerror="this.style.visibility='hidden'" alt="">
+        <div class="info">
+          <div class="title"><a href="${mapLink(s)}" target="_blank" rel="noopener">${esc(s.artist?s.artist+" - ":"")}${esc(s.title||"Untitled")}</a></div>
+          <div class="sub">[${esc(s.difficulty||"?")}] mapped by ${esc(s.mapper||"?")}</div>
+          ${stats.length?`<div class="stats">${stats.join(" ")}</div>`:""}
+          ${skills.length?`<div class="skills">${skills.map(t=>`<span class="skill-tag">${esc(t)}</span>`).join("")}</div>`:""}
+        </div></div>`;
+    });
+    html += `</div>`;
   });
-  return out;
+  app.innerHTML = html;
+}
+function roundBar(active, varName) {
+  return `<div class="round-bar">` + pool.rounds.map(r =>
+    `<button class="${r.id===active.id?'active':''}" onclick="${varName}='${r.id}';render()">${esc(r.name)}</button>`).join("") + `</div>`;
 }
 
-export async function createSession(user) {
-  const token = crypto.randomBytes(32).toString("hex");
-  // store only stable identity fields; role is resolved fresh each request
-  const payload = { id: user.id, username: user.username, avatar_url: user.avatar_url };
-  await redis("SET", "session:" + token, JSON.stringify(payload), "EX", String(SESSION_TTL));
-  return token;
+/* ---------- BUILDER (host) ---------- */
+function savePool(now) {
+  clearTimeout(saveTimer);
+  const doSave = async () => {
+    const el = document.getElementById("savestate");
+    if (el) el.textContent = "Saving…";
+    try { await api("/api/pool", { method: "POST", body: JSON.stringify(pool) }); if (el) el.textContent = "Saved ✓"; }
+    catch (e) { if (el) el.textContent = "Save failed: " + e.message; }
+  };
+  now ? doSave() : (saveTimer = setTimeout(doSave, 600));
+}
+function renderBuilder() {
+  const app = document.getElementById("app");
+  let html = `<div class="row">
+      <div class="field"><label>Tournament name</label>
+        <input value="${esc(pool.name)}" oninput="pool.name=this.value;document.getElementById('tname').textContent=this.value;savePool()"></div>
+      <div class="field"><label>New round</label><input id="newRound" placeholder="e.g. Quarterfinals"></div>
+      <button class="btn" onclick="addRound()">+ Add round</button>
+      <span id="savestate" class="save-state"></span>
+    </div>`;
+  if (!pool.rounds.length) { app.innerHTML = html + `<div class="empty">No rounds yet.</div>`; return; }
+  const round = pool.rounds.find(r => r.id === activeRound) || pool.rounds[0];
+  activeRound = round.id;
+  html += roundBar(round, "activeRound");
+  html += `<div class="row">
+      <div class="field" style="flex:1;min-width:240px"><label>Mappack URL</label>
+        <input value="${esc(round.mappackUrl||"")}" oninput="setRound('${round.id}','mappackUrl',this.value)" placeholder="https://..."></div>
+      <button class="btn danger" onclick="deleteRound('${round.id}')">Delete round</button>
+    </div>`;
+  html += `<div style="overflow-x:auto"><table class="builder"><thead><tr>
+    <th>Mod</th><th>#</th><th>osu! link</th><th>Artist</th><th>Title</th><th>Diff</th><th>Mapper</th>
+    <th>★</th><th>BPM</th><th>Len</th><th>CS</th><th>AR</th><th>OD</th><th>Skills</th><th></th></tr></thead><tbody>`;
+  (round.slots||[]).forEach(s => {
+    html += `<tr>
+      <td><select onchange="upd('${s._id}','mod',this.value)">${MODS.map(m=>`<option ${m===s.mod?'selected':''}>${m}</option>`).join("")}</select></td>
+      <td><input value="${esc(s.index||"")}" style="width:38px" oninput="upd('${s._id}','index',this.value)"></td>
+      <td><input value="${esc(s._link||"")}" placeholder="paste link" oninput="onLink('${s._id}',this.value)"></td>
+      <td><input value="${esc(s.artist||"")}" oninput="upd('${s._id}','artist',this.value)"></td>
+      <td><input value="${esc(s.title||"")}" oninput="upd('${s._id}','title',this.value)"></td>
+      <td><input value="${esc(s.difficulty||"")}" oninput="upd('${s._id}','difficulty',this.value)"></td>
+      <td><input value="${esc(s.mapper||"")}" oninput="upd('${s._id}','mapper',this.value)"></td>
+      <td><input value="${esc(s.stars||"")}" style="width:48px" oninput="upd('${s._id}','stars',this.value)"></td>
+      <td><input value="${esc(s.bpm||"")}" style="width:52px" oninput="upd('${s._id}','bpm',this.value)"></td>
+      <td><input value="${esc(s.length||"")}" style="width:52px" oninput="upd('${s._id}','length',this.value)"></td>
+      <td><input value="${esc(s.cs||"")}" style="width:42px" oninput="upd('${s._id}','cs',this.value)"></td>
+      <td><input value="${esc(s.ar||"")}" style="width:42px" oninput="upd('${s._id}','ar',this.value)"></td>
+      <td><input value="${esc(s.od||"")}" style="width:42px" oninput="upd('${s._id}','od',this.value)"></td>
+      <td><input value="${esc(s.skills||"")}" placeholder="stream, aim" oninput="upd('${s._id}','skills',this.value)"></td>
+      <td><button class="btn danger" onclick="delSlot('${s._id}')">✕</button></td></tr>`;
+  });
+  html += `</tbody></table></div>
+    <div class="row" style="margin-top:10px"><button class="btn" onclick="addSlot('${round.id}')">+ Add map</button>
+    <span class="muted">Paste a beatmap link to auto-fill IDs (cover + links). Skills are comma-separated.</span></div>`;
+  app.innerHTML = html;
+}
+function addRound() {
+  const name = (document.getElementById("newRound").value||"").trim(); if (!name) return;
+  const r = { id: uid(), name, mappackUrl: "", slots: [] };
+  pool.rounds.push(r); activeRound = r.id; savePool(true); render();
+}
+function deleteRound(id) {
+  if (!confirm("Delete this round and its maps?")) return;
+  pool.rounds = pool.rounds.filter(r => r.id !== id);
+  activeRound = pool.rounds[0]?.id || null; savePool(true); render();
+}
+function setRound(id, field, v) { const r = pool.rounds.find(x=>x.id===id); if (r){ r[field]=v; savePool(); } }
+function addSlot(roundId) {
+  const r = pool.rounds.find(x=>x.id===roundId); if (!r) return;
+  r.slots.push({ _id: uid(), mod:"NM", index:"", title:"", artist:"", difficulty:"", mapper:"", stars:"", bpm:"", length:"", cs:"", ar:"", od:"", skills:"", beatmapId:null, beatmapsetId:null, _link:"" });
+  savePool(); renderBuilder();
+}
+function delSlot(sid) {
+  const r = pool.rounds.find(x=>x.id===activeRound); if (!r) return;
+  r.slots = r.slots.filter(s=>s._id!==sid); savePool(); renderBuilder();
+}
+function findSlot(sid) { for (const r of pool.rounds){ const s=(r.slots||[]).find(x=>x._id===sid); if (s) return s; } return null; }
+function upd(sid, field, v) { const s = findSlot(sid); if (s){ s[field]=v; savePool(); } }
+function onLink(sid, v) {
+  const s = findSlot(sid); if (!s) return; s._link = v;
+  const { beatmapId, beatmapsetId } = parseOsu(v);
+  if (beatmapId) s.beatmapId = beatmapId;
+  if (beatmapsetId) s.beatmapsetId = beatmapsetId;
+  savePool();
 }
 
-export function sessionCookie(token) {
-  return `sid=${token}; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=${SESSION_TTL}`;
+/* ---------- SUGGESTIONS (mappooler/host) ---------- */
+async function renderSuggest() {
+  const app = document.getElementById("app");
+  app.innerHTML = `<div class="empty">Loading suggestions…</div>`;
+  let list = [];
+  try { list = (await api("/api/suggestions")).suggestions; } catch (e) { app.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  const roundOpts = pool.rounds.map(r => `<option value="${esc(r.name)}">${esc(r.name)}</option>`).join("");
+  let html = `<div class="card"><h3 style="margin-top:0">Suggest a map</h3>
+    <div class="row">
+      <div class="field"><label>Round</label><select id="sg-round"><option value="">—</option>${roundOpts}</select></div>
+      <div class="field"><label>Mod</label><select id="sg-mod">${MODS.map(m=>`<option>${m}</option>`).join("")}</select></div>
+      <div class="field" style="flex:1;min-width:220px"><label>osu! link</label><input id="sg-link" placeholder="https://osu.ppy.sh/beatmapsets/..."></div>
+    </div>
+    <div class="row">
+      <div class="field" style="flex:1;min-width:220px"><label>Title / note (optional)</label><input id="sg-title" placeholder="Artist - Title [Diff]"></div>
+      <div class="field" style="flex:2;min-width:220px"><label>Comment</label><input id="sg-comment" placeholder="why this map?"></div>
+      <button class="btn" onclick="submitSuggestion()">Submit</button>
+    </div></div>`;
+  html += `<h3>Suggestions (${list.length})</h3>`;
+  if (!list.length) html += `<div class="empty">No suggestions yet.</div>`;
+  list.forEach(s => {
+    const ids = parseOsu(s.link || "");
+    html += `<div class="card"><div style="display:flex;gap:12px;align-items:center">
+      ${ids.beatmapsetId?`<img class="cover" src="${cover(ids.beatmapsetId)}" onerror="this.style.display='none'" alt="">`:""}
+      <div style="flex:1;min-width:0">
+        <div><span class="badge ${esc(s.mod)}" style="display:inline-block;width:auto;padding:2px 8px">${esc(s.mod)}</span>
+          ${s.round?`<span class="pill">${esc(s.round)}</span>`:""}
+          ${s.link?`<a href="${esc(s.link)}" target="_blank" rel="noopener">${esc(s.title||s.link)}</a>`:esc(s.title)}</div>
+        ${s.comment?`<div class="muted">${esc(s.comment)}</div>`:""}
+        <div class="muted">by ${esc(s.by)} · ${new Date(s.at).toLocaleString()}</div>
+      </div>
+      <div style="display:flex;gap:6px">
+        ${isHost()?`<button class="btn" onclick='addSuggestionToPool(${JSON.stringify(s)})'>→ Add to pool</button>`:""}
+        ${(isHost()||s.byId===me.id)?`<button class="btn danger" onclick="delSuggestion('${s.id}')">Delete</button>`:""}
+      </div></div></div>`;
+  });
+  app.innerHTML = html;
 }
-export function clearCookie() {
-  return `sid=; HttpOnly; Secure; SameSite=Lax; Path=/; Max-Age=0`;
+async function submitSuggestion() {
+  const body = {
+    round: document.getElementById("sg-round").value,
+    mod: document.getElementById("sg-mod").value,
+    link: document.getElementById("sg-link").value.trim(),
+    title: document.getElementById("sg-title").value.trim(),
+    comment: document.getElementById("sg-comment").value.trim(),
+  };
+  if (!body.link && !body.title) { alert("Add a link or a title."); return; }
+  try { await api("/api/suggestions", { method: "POST", body: JSON.stringify(body) }); renderSuggest(); }
+  catch (e) { alert(e.message); }
+}
+async function delSuggestion(id) {
+  if (!confirm("Delete this suggestion?")) return;
+  try { await api("/api/suggestions?id=" + id, { method: "DELETE" }); renderSuggest(); }
+  catch (e) { alert(e.message); }
+}
+function addSuggestionToPool(s) {
+  // find round by name, else first round
+  let r = pool.rounds.find(x => x.name === s.round) || pool.rounds[0];
+  if (!r) { alert("Create a round first (Builder tab)."); return; }
+  const ids = parseOsu(s.link || "");
+  r.slots.push({ _id: uid(), mod: s.mod || "NM", index: "", title: s.title || "", artist: "", difficulty: "", mapper: "", stars: "", bpm: "", length: "", cs: "", ar: "", od: "", skills: "", beatmapId: ids.beatmapId, beatmapsetId: ids.beatmapsetId, _link: s.link || "" });
+  savePool(true);
+  alert(`Added to ${r.name}. Fill in details in the Builder tab.`);
 }
 
-// Resolve a user's role. The OWNER_OSU_ID env var is always "host" (bootstrap admin).
-export async function getRole(osuId) {
-  const owner = process.env.OWNER_OSU_ID;
-  if (owner && String(osuId) === String(owner)) return "host";
-  const raw = await redis("HGET", "roles", String(osuId));
-  if (!raw) return "user";
-  try { return JSON.parse(raw).role || "user"; } catch { return "user"; }
+/* ---------- ADMIN (host) ---------- */
+async function renderAdmin() {
+  const app = document.getElementById("app");
+  app.innerHTML = `<div class="empty">Loading roles…</div>`;
+  let roles = [];
+  try { roles = (await api("/api/roles")).roles; } catch (e) { app.innerHTML = `<div class="empty">${esc(e.message)}</div>`; return; }
+  let html = `<div class="card"><h3 style="margin-top:0">Assign role</h3>
+    <div class="row">
+      <div class="field" style="flex:1;min-width:200px"><label>osu! username or user ID</label><input id="rl-key" placeholder="e.g. peppy or 2"></div>
+      <div class="field"><label>Role</label><select id="rl-role"><option value="mappooler">mappooler</option><option value="host">host</option></select></div>
+      <button class="btn" onclick="assignRole()">Save</button>
+    </div>
+    <span class="muted">Roles: <b>host</b> = full admin (builder + everything). <b>mappooler</b> = can suggest & view suggestions. Everyone else is a viewer.</span>
+  </div>`;
+  html += `<h3>Current roles (${roles.length})</h3>`;
+  if (!roles.length) html += `<div class="empty">No roles assigned yet. The OWNER_OSU_ID account is always host.</div>`;
+  roles.forEach(r => {
+    html += `<div class="card" style="display:flex;align-items:center;gap:12px">
+      <div style="flex:1"><b>${esc(r.username||r.id)}</b> <span class="muted">(id ${esc(r.id)})</span> — <span class="pill">${esc(r.role)}</span></div>
+      <button class="btn danger" onclick="removeRole('${esc(r.id)}','${esc(r.username||r.id)}')">Remove</button></div>`;
+  });
+  app.innerHTML = html;
+}
+async function assignRole() {
+  const key = document.getElementById("rl-key").value.trim();
+  const role = document.getElementById("rl-role").value;
+  if (!key) return;
+  try { await api("/api/roles", { method: "POST", body: JSON.stringify({ key, role }) }); renderAdmin(); }
+  catch (e) { alert(e.message); }
+}
+async function removeRole(id, name) {
+  if (!confirm(`Remove role from ${name}?`)) return;
+  try { await api("/api/roles", { method: "POST", body: JSON.stringify({ key: id, role: "user" }) }); renderAdmin(); }
+  catch (e) { alert(e.message); }
 }
 
-export async function getUser(req) {
-  const { sid } = parseCookies(req);
-  if (!sid) return null;
-  const raw = await redis("GET", "session:" + sid);
-  if (!raw) return null;
-  const user = JSON.parse(raw);
-  user.role = await getRole(user.id);
-  return user;
-}
+init();
+</script>
+</body>
+</html>
