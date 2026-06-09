@@ -45,7 +45,8 @@
   table.builder { width: 100%; border-collapse: collapse; font-size: 12px; }
   table.builder th, table.builder td { border: 1px solid #34343c; padding: 5px; }
   table.builder th { background: #2a2a30; }
-  table.builder input { width: 100%; min-width: 55px; }
+  table.builder input { width: 100%; min-width: 50px; }
+  table.builder .auto { color: #8a8; }
   .card { background: #232329; border: 1px solid #34343c; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
   .muted { color: #a0a0a8; font-size: 12px; }
   .empty { color: #a0a0a8; padding: 30px; text-align: center; }
@@ -63,11 +64,8 @@
 
 <script>
 const MODS = ["NM","HD","HR","DT","FM","TB","EZ","FL"];
-let me = null;          // {id, username, avatar_url, role}
-let pool = { name: "Mappool", rounds: [] };
-let view = "viewer";
-let activeRound = null;
-let saveTimer = null;
+let me = null, pool = { name: "Mappool", rounds: [] }, view = "viewer", activeRound = null, saveTimer = null;
+let sgStats = null; // last fetched stats for the suggest form
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -85,11 +83,24 @@ function mapLink(s) {
   if (s.beatmapsetId) return `https://osu.ppy.sh/beatmapsets/${s.beatmapsetId}`;
   return "#";
 }
-
 async function api(path, opts) {
   const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
   if (!res.ok) { const e = await res.json().catch(()=>({})); throw new Error(e.error || res.status); }
   return res.json();
+}
+async function fetchStats(beatmapId, mod) {
+  return api(`/api/beatmap?id=${encodeURIComponent(beatmapId)}&mod=${encodeURIComponent(mod||"NM")}`);
+}
+function statLine(s) {
+  const out = [];
+  if (s.stars != null && s.stars !== "")  out.push(`<b>${esc(s.stars)}★</b>`);
+  if (s.bpm)    out.push(`${esc(s.bpm)} BPM`);
+  if (s.length) out.push(esc(s.length));
+  if (s.cs != null && s.cs !== "") out.push(`CS ${esc(s.cs)}`);
+  if (s.ar != null && s.ar !== "") out.push(`AR ${esc(s.ar)}`);
+  if (s.od != null && s.od !== "") out.push(`OD ${esc(s.od)}`);
+  if (s.hp != null && s.hp !== "") out.push(`HP ${esc(s.hp)}`);
+  return out;
 }
 
 async function init() {
@@ -98,33 +109,29 @@ async function init() {
   if (!activeRound) activeRound = pool.rounds[0]?.id || null;
   render();
 }
-
-function isHost() { return me && me.role === "host"; }
-function canSuggest() { return me && (me.role === "host" || me.role === "mappooler"); }
+const isHost = () => me && me.role === "host";
+const canSuggest = () => me && (me.role === "host" || me.role === "mappooler");
 
 function render() {
   document.getElementById("tname").textContent = pool.name || "Mappool";
-  // user box
   const ub = document.getElementById("userbox");
-  if (me) {
-    ub.innerHTML = `<img src="${esc(me.avatar_url||"")}" alt=""><span>${esc(me.username)}</span>
-      <span class="pill">${esc(me.role)}</span>
-      <a class="btn secondary" href="/api/auth/logout">Logout</a>`;
-  } else {
-    ub.innerHTML = `<a class="btn" href="/api/auth/login">Login with osu!</a>`;
-  }
-  // tabs
+  ub.innerHTML = me
+    ? `<img src="${esc(me.avatar_url||"")}" alt=""><span>${esc(me.username)}</span><span class="pill">${esc(me.role)}</span><a class="btn secondary" href="/api/auth/logout">Logout</a>`
+    : `<a class="btn" href="/api/auth/login">Login with osu!</a>`;
   const tabs = [["viewer","Viewer"]];
   if (canSuggest()) tabs.push(["suggest","Suggestions"]);
   if (isHost()) { tabs.push(["builder","Builder"]); tabs.push(["admin","Admin"]); }
   if (!tabs.find(t => t[0] === view)) view = "viewer";
-  document.getElementById("tabs").innerHTML = tabs.map(([k,l]) =>
-    `<button class="${k===view?'active':''}" onclick="view='${k}';render()">${l}</button>`).join("");
-
+  document.getElementById("tabs").innerHTML = tabs.map(([k,l]) => `<button class="${k===view?'active':''}" onclick="view='${k}';render()">${l}</button>`).join("");
   ({ viewer: renderViewer, builder: renderBuilder, suggest: renderSuggest, admin: renderAdmin }[view])();
 }
 
-/* ---------- VIEWER (public) ---------- */
+function roundBar(active, varName) {
+  return `<div class="round-bar">` + pool.rounds.map(r =>
+    `<button class="${r.id===active.id?'active':''}" onclick="${varName}='${r.id}';render()">${esc(r.name)}</button>`).join("") + `</div>`;
+}
+
+/* ---------- VIEWER ---------- */
 function renderViewer() {
   const app = document.getElementById("app");
   if (!pool.rounds.length) { app.innerHTML = `<div class="empty">No rounds yet.</div>`; return; }
@@ -140,13 +147,7 @@ function renderViewer() {
   Object.keys(groups).sort((a,b)=>order(a)-order(b)).forEach(mod => {
     html += `<div class="mod-group"><div class="mod-header">${esc(mod)}</div>`;
     groups[mod].forEach(s => {
-      const stats = [];
-      if (s.stars)  stats.push(`<b>${esc(s.stars)}★</b>`);
-      if (s.bpm)    stats.push(`${esc(s.bpm)} BPM`);
-      if (s.length) stats.push(esc(s.length));
-      if (s.cs)     stats.push(`CS ${esc(s.cs)}`);
-      if (s.ar)     stats.push(`AR ${esc(s.ar)}`);
-      if (s.od)     stats.push(`OD ${esc(s.od)}`);
+      const stats = statLine(s);
       const skills = (s.skills||"").split(",").map(x=>x.trim()).filter(Boolean);
       html += `<div class="slot">
         <span class="badge ${esc(s.mod)}">${esc(s.mod)}${esc(s.index||"")}</span>
@@ -162,12 +163,8 @@ function renderViewer() {
   });
   app.innerHTML = html;
 }
-function roundBar(active, varName) {
-  return `<div class="round-bar">` + pool.rounds.map(r =>
-    `<button class="${r.id===active.id?'active':''}" onclick="${varName}='${r.id}';render()">${esc(r.name)}</button>`).join("") + `</div>`;
-}
 
-/* ---------- BUILDER (host) ---------- */
+/* ---------- BUILDER ---------- */
 function savePool(now) {
   clearTimeout(saveTimer);
   const doSave = async () => {
@@ -197,29 +194,29 @@ function renderBuilder() {
       <button class="btn danger" onclick="deleteRound('${round.id}')">Delete round</button>
     </div>`;
   html += `<div style="overflow-x:auto"><table class="builder"><thead><tr>
-    <th>Mod</th><th>#</th><th>osu! link</th><th>Artist</th><th>Title</th><th>Diff</th><th>Mapper</th>
-    <th>★</th><th>BPM</th><th>Len</th><th>CS</th><th>AR</th><th>OD</th><th>Skills</th><th></th></tr></thead><tbody>`;
+    <th>Mod</th><th>#</th><th>osu! link</th><th>Title (auto)</th>
+    <th>★</th><th>BPM</th><th>Len</th><th>CS</th><th>AR</th><th>OD</th><th>HP</th><th>Skills</th><th></th></tr></thead><tbody>`;
   (round.slots||[]).forEach(s => {
     html += `<tr>
-      <td><select onchange="upd('${s._id}','mod',this.value)">${MODS.map(m=>`<option ${m===s.mod?'selected':''}>${m}</option>`).join("")}</select></td>
-      <td><input value="${esc(s.index||"")}" style="width:38px" oninput="upd('${s._id}','index',this.value)"></td>
-      <td><input value="${esc(s._link||"")}" placeholder="paste link" oninput="onLink('${s._id}',this.value)"></td>
-      <td><input value="${esc(s.artist||"")}" oninput="upd('${s._id}','artist',this.value)"></td>
-      <td><input value="${esc(s.title||"")}" oninput="upd('${s._id}','title',this.value)"></td>
-      <td><input value="${esc(s.difficulty||"")}" oninput="upd('${s._id}','difficulty',this.value)"></td>
-      <td><input value="${esc(s.mapper||"")}" oninput="upd('${s._id}','mapper',this.value)"></td>
-      <td><input value="${esc(s.stars||"")}" style="width:48px" oninput="upd('${s._id}','stars',this.value)"></td>
-      <td><input value="${esc(s.bpm||"")}" style="width:52px" oninput="upd('${s._id}','bpm',this.value)"></td>
-      <td><input value="${esc(s.length||"")}" style="width:52px" oninput="upd('${s._id}','length',this.value)"></td>
-      <td><input value="${esc(s.cs||"")}" style="width:42px" oninput="upd('${s._id}','cs',this.value)"></td>
-      <td><input value="${esc(s.ar||"")}" style="width:42px" oninput="upd('${s._id}','ar',this.value)"></td>
-      <td><input value="${esc(s.od||"")}" style="width:42px" oninput="upd('${s._id}','od',this.value)"></td>
+      <td><select onchange="onModChange('${s._id}',this.value)">${MODS.map(m=>`<option ${m===s.mod?'selected':''}>${m}</option>`).join("")}</select></td>
+      <td><input value="${esc(s.index||"")}" style="width:36px" oninput="upd('${s._id}','index',this.value)"></td>
+      <td><input value="${esc(s._link||"")}" placeholder="paste link" onchange="onLink('${s._id}',this.value)"></td>
+      <td><input class="auto" value="${esc(s.artist?s.artist+' - ':'')}${esc(s.title||'')}" title="auto-filled" readonly></td>
+      <td><input value="${esc(s.stars ?? '')}" style="width:48px" oninput="upd('${s._id}','stars',this.value)"></td>
+      <td><input value="${esc(s.bpm ?? '')}" style="width:52px" oninput="upd('${s._id}','bpm',this.value)"></td>
+      <td><input value="${esc(s.length ?? '')}" style="width:50px" oninput="upd('${s._id}','length',this.value)"></td>
+      <td><input value="${esc(s.cs ?? '')}" style="width:42px" oninput="upd('${s._id}','cs',this.value)"></td>
+      <td><input value="${esc(s.ar ?? '')}" style="width:42px" oninput="upd('${s._id}','ar',this.value)"></td>
+      <td><input value="${esc(s.od ?? '')}" style="width:42px" oninput="upd('${s._id}','od',this.value)"></td>
+      <td><input value="${esc(s.hp ?? '')}" style="width:42px" oninput="upd('${s._id}','hp',this.value)"></td>
       <td><input value="${esc(s.skills||"")}" placeholder="stream, aim" oninput="upd('${s._id}','skills',this.value)"></td>
-      <td><button class="btn danger" onclick="delSlot('${s._id}')">✕</button></td></tr>`;
+      <td style="white-space:nowrap">
+        <button class="btn secondary" title="Re-fetch stats" onclick="fetchSlot('${s._id}')">↻</button>
+        <button class="btn danger" onclick="delSlot('${s._id}')">✕</button></td></tr>`;
   });
   html += `</tbody></table></div>
     <div class="row" style="margin-top:10px"><button class="btn" onclick="addSlot('${round.id}')">+ Add map</button>
-    <span class="muted">Paste a beatmap link to auto-fill IDs (cover + links). Skills are comma-separated.</span></div>`;
+    <span class="muted">Paste a difficulty link (with #osu/&lt;id&gt;) — stats auto-fill and recalc when you change the mod. ↻ re-fetches. Fields stay editable for manual overrides.</span></div>`;
   app.innerHTML = html;
 }
 function addRound() {
@@ -235,7 +232,7 @@ function deleteRound(id) {
 function setRound(id, field, v) { const r = pool.rounds.find(x=>x.id===id); if (r){ r[field]=v; savePool(); } }
 function addSlot(roundId) {
   const r = pool.rounds.find(x=>x.id===roundId); if (!r) return;
-  r.slots.push({ _id: uid(), mod:"NM", index:"", title:"", artist:"", difficulty:"", mapper:"", stars:"", bpm:"", length:"", cs:"", ar:"", od:"", skills:"", beatmapId:null, beatmapsetId:null, _link:"" });
+  r.slots.push({ _id: uid(), mod:"NM", index:"", title:"", artist:"", difficulty:"", mapper:"", stars:"", bpm:"", length:"", cs:"", ar:"", od:"", hp:"", skills:"", beatmapId:null, beatmapsetId:null, _link:"" });
   savePool(); renderBuilder();
 }
 function delSlot(sid) {
@@ -246,13 +243,32 @@ function findSlot(sid) { for (const r of pool.rounds){ const s=(r.slots||[]).fin
 function upd(sid, field, v) { const s = findSlot(sid); if (s){ s[field]=v; savePool(); } }
 function onLink(sid, v) {
   const s = findSlot(sid); if (!s) return; s._link = v;
-  const { beatmapId, beatmapsetId } = parseOsu(v);
-  if (beatmapId) s.beatmapId = beatmapId;
-  if (beatmapsetId) s.beatmapsetId = beatmapsetId;
+  const ids = parseOsu(v);
+  if (ids.beatmapId) s.beatmapId = ids.beatmapId;
+  if (ids.beatmapsetId) s.beatmapsetId = ids.beatmapsetId;
   savePool();
+  if (s.beatmapId) fetchSlot(sid);   // auto-fill on paste
+}
+function onModChange(sid, v) {
+  const s = findSlot(sid); if (!s) return; s.mod = v; savePool();
+  if (s.beatmapId) fetchSlot(sid);   // recalc stats for the new mod
+  else renderBuilder();
+}
+async function fetchSlot(sid) {
+  const s = findSlot(sid); if (!s) return;
+  if (!s.beatmapId) { alert("Paste a difficulty link first (it must contain #osu/<id>)."); return; }
+  const el = document.getElementById("savestate"); if (el) el.textContent = "Fetching…";
+  try {
+    const d = await fetchStats(s.beatmapId, s.mod);
+    Object.assign(s, {
+      beatmapsetId: d.beatmapsetId, title: d.title, artist: d.artist, mapper: d.mapper,
+      difficulty: d.difficulty, cs: d.cs, ar: d.ar, od: d.od, hp: d.hp, bpm: d.bpm, length: d.length, stars: d.stars,
+    });
+    savePool(true); renderBuilder();
+  } catch (e) { if (el) el.textContent = "Fetch failed: " + e.message; }
 }
 
-/* ---------- SUGGESTIONS (mappooler/host) ---------- */
+/* ---------- SUGGESTIONS ---------- */
 async function renderSuggest() {
   const app = document.getElementById("app");
   app.innerHTML = `<div class="empty">Loading suggestions…</div>`;
@@ -262,44 +278,66 @@ async function renderSuggest() {
   let html = `<div class="card"><h3 style="margin-top:0">Suggest a map</h3>
     <div class="row">
       <div class="field"><label>Round</label><select id="sg-round"><option value="">—</option>${roundOpts}</select></div>
-      <div class="field"><label>Mod</label><select id="sg-mod">${MODS.map(m=>`<option>${m}</option>`).join("")}</select></div>
-      <div class="field" style="flex:1;min-width:220px"><label>osu! link</label><input id="sg-link" placeholder="https://osu.ppy.sh/beatmapsets/..."></div>
+      <div class="field"><label>Mod</label><select id="sg-mod" onchange="sgFetch()">${MODS.map(m=>`<option>${m}</option>`).join("")}</select></div>
+      <div class="field" style="flex:1;min-width:220px"><label>osu! difficulty link</label><input id="sg-link" placeholder="https://osu.ppy.sh/beatmapsets/..#osu/.." onchange="sgFetch()"></div>
     </div>
-    <div class="row">
-      <div class="field" style="flex:1;min-width:220px"><label>Title / note (optional)</label><input id="sg-title" placeholder="Artist - Title [Diff]"></div>
+    <div id="sg-preview" class="muted"></div>
+    <div class="row" style="margin-top:8px">
       <div class="field" style="flex:2;min-width:220px"><label>Comment</label><input id="sg-comment" placeholder="why this map?"></div>
       <button class="btn" onclick="submitSuggestion()">Submit</button>
     </div></div>`;
   html += `<h3>Suggestions (${list.length})</h3>`;
   if (!list.length) html += `<div class="empty">No suggestions yet.</div>`;
   list.forEach(s => {
-    const ids = parseOsu(s.link || "");
+    const stats = statLine(s);
+    const payload = encodeURIComponent(JSON.stringify(s));
     html += `<div class="card"><div style="display:flex;gap:12px;align-items:center">
-      ${ids.beatmapsetId?`<img class="cover" src="${cover(ids.beatmapsetId)}" onerror="this.style.display='none'" alt="">`:""}
+      ${s.beatmapsetId?`<img class="cover" src="${cover(s.beatmapsetId)}" onerror="this.style.display='none'" alt="">`:""}
       <div style="flex:1;min-width:0">
         <div><span class="badge ${esc(s.mod)}" style="display:inline-block;width:auto;padding:2px 8px">${esc(s.mod)}</span>
           ${s.round?`<span class="pill">${esc(s.round)}</span>`:""}
-          ${s.link?`<a href="${esc(s.link)}" target="_blank" rel="noopener">${esc(s.title||s.link)}</a>`:esc(s.title)}</div>
+          ${s.link?`<a href="${esc(s.link)}" target="_blank" rel="noopener">${esc((s.artist?s.artist+' - ':'')+(s.title||s.link))}</a>`:esc(s.title)}
+          ${s.difficulty?`<span class="muted"> [${esc(s.difficulty)}]</span>`:""}</div>
+        ${stats.length?`<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:#c8c8d0;margin-top:4px">${stats.join(" ")}</div>`:""}
         ${s.comment?`<div class="muted">${esc(s.comment)}</div>`:""}
         <div class="muted">by ${esc(s.by)} · ${new Date(s.at).toLocaleString()}</div>
       </div>
       <div style="display:flex;gap:6px">
-        ${isHost()?`<button class="btn" onclick='addSuggestionToPool(${JSON.stringify(s)})'>→ Add to pool</button>`:""}
+        ${isHost()?`<button class="btn" onclick="addSuggestionToPool('${payload}')">→ Add to pool</button>`:""}
         ${(isHost()||s.byId===me.id)?`<button class="btn danger" onclick="delSuggestion('${s.id}')">Delete</button>`:""}
       </div></div></div>`;
   });
   app.innerHTML = html;
 }
+async function sgFetch() {
+  sgStats = null;
+  const link = document.getElementById("sg-link").value.trim();
+  const mod = document.getElementById("sg-mod").value;
+  const prev = document.getElementById("sg-preview");
+  const ids = parseOsu(link);
+  if (!ids.beatmapId) { prev.textContent = link ? "Tip: use a difficulty link containing #osu/<id> to auto-fill stats." : ""; return; }
+  prev.textContent = "Fetching stats…";
+  try {
+    const d = await fetchStats(ids.beatmapId, mod);
+    sgStats = d;
+    prev.innerHTML = `<b>${esc(d.artist)} - ${esc(d.title)}</b> [${esc(d.difficulty)}] · ` + statLine(d).join(" ");
+  } catch (e) { prev.textContent = "Could not fetch: " + e.message; }
+}
 async function submitSuggestion() {
+  const link = document.getElementById("sg-link").value.trim();
   const body = {
     round: document.getElementById("sg-round").value,
     mod: document.getElementById("sg-mod").value,
-    link: document.getElementById("sg-link").value.trim(),
-    title: document.getElementById("sg-title").value.trim(),
+    link,
     comment: document.getElementById("sg-comment").value.trim(),
   };
-  if (!body.link && !body.title) { alert("Add a link or a title."); return; }
-  try { await api("/api/suggestions", { method: "POST", body: JSON.stringify(body) }); renderSuggest(); }
+  if (sgStats) Object.assign(body, {
+    title: sgStats.title, artist: sgStats.artist, mapper: sgStats.mapper, difficulty: sgStats.difficulty,
+    beatmapId: sgStats.beatmapId, beatmapsetId: sgStats.beatmapsetId,
+    stars: sgStats.stars, bpm: sgStats.bpm, length: sgStats.length, cs: sgStats.cs, ar: sgStats.ar, od: sgStats.od, hp: sgStats.hp,
+  });
+  if (!body.link && !body.title) { alert("Add a link (or at least a title)."); return; }
+  try { await api("/api/suggestions", { method: "POST", body: JSON.stringify(body) }); sgStats = null; renderSuggest(); }
   catch (e) { alert(e.message); }
 }
 async function delSuggestion(id) {
@@ -307,17 +345,18 @@ async function delSuggestion(id) {
   try { await api("/api/suggestions?id=" + id, { method: "DELETE" }); renderSuggest(); }
   catch (e) { alert(e.message); }
 }
-function addSuggestionToPool(s) {
-  // find round by name, else first round
+function addSuggestionToPool(payload) {
+  const s = JSON.parse(decodeURIComponent(payload));
   let r = pool.rounds.find(x => x.name === s.round) || pool.rounds[0];
   if (!r) { alert("Create a round first (Builder tab)."); return; }
-  const ids = parseOsu(s.link || "");
-  r.slots.push({ _id: uid(), mod: s.mod || "NM", index: "", title: s.title || "", artist: "", difficulty: "", mapper: "", stars: "", bpm: "", length: "", cs: "", ar: "", od: "", skills: "", beatmapId: ids.beatmapId, beatmapsetId: ids.beatmapsetId, _link: s.link || "" });
+  r.slots.push({ _id: uid(), mod: s.mod||"NM", index: "", title: s.title||"", artist: s.artist||"", difficulty: s.difficulty||"",
+    mapper: s.mapper||"", stars: s.stars ?? "", bpm: s.bpm ?? "", length: s.length||"", cs: s.cs ?? "", ar: s.ar ?? "", od: s.od ?? "", hp: s.hp ?? "",
+    skills: "", beatmapId: s.beatmapId||null, beatmapsetId: s.beatmapsetId||null, _link: s.link||"" });
   savePool(true);
-  alert(`Added to ${r.name}. Fill in details in the Builder tab.`);
+  alert(`Added to ${r.name}.`);
 }
 
-/* ---------- ADMIN (host) ---------- */
+/* ---------- ADMIN ---------- */
 async function renderAdmin() {
   const app = document.getElementById("app");
   app.innerHTML = `<div class="empty">Loading roles…</div>`;
@@ -329,7 +368,7 @@ async function renderAdmin() {
       <div class="field"><label>Role</label><select id="rl-role"><option value="mappooler">mappooler</option><option value="host">host</option></select></div>
       <button class="btn" onclick="assignRole()">Save</button>
     </div>
-    <span class="muted">Roles: <b>host</b> = full admin (builder + everything). <b>mappooler</b> = can suggest & view suggestions. Everyone else is a viewer.</span>
+    <span class="muted"><b>host</b> = full admin (builder + everything). <b>mappooler</b> = suggest & view suggestions. Everyone else views only.</span>
   </div>`;
   html += `<h3>Current roles (${roles.length})</h3>`;
   if (!roles.length) html += `<div class="empty">No roles assigned yet. The OWNER_OSU_ID account is always host.</div>`;
