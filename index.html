@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Mappool</title>
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    margin: 0; background: #1a1a1e; color: #e8e8ea; line-height: 1.45;
+  }
+  header {
+    background: #232329; padding: 12px 16px; display: flex; align-items: center;
+    gap: 16px; flex-wrap: wrap; border-bottom: 1px solid #34343c;
+  }
+  header h1 { font-size: 18px; margin: 0; }
+  .tabs { display: flex; gap: 4px; }
+  .tabs button, .mode-btn {
+    background: #34343c; color: #e8e8ea; border: none; padding: 8px 16px;
+    border-radius: 6px; cursor: pointer; font-size: 14px;
+  }
+  .tabs button.active { background: #e0457b; }
+  main { padding: 16px; max-width: 1000px; margin: 0 auto; }
+  select, input, button { font-family: inherit; }
+  input, select {
+    background: #2a2a30; color: #e8e8ea; border: 1px solid #44444c;
+    border-radius: 5px; padding: 6px 8px; font-size: 13px;
+  }
+  label { font-size: 12px; color: #a0a0a8; display: block; margin-bottom: 3px; }
+  .btn {
+    background: #e0457b; color: #fff; border: none; padding: 8px 14px;
+    border-radius: 6px; cursor: pointer; font-size: 14px;
+  }
+  .btn.secondary { background: #34343c; }
+  .btn.danger { background: #7a2a2a; }
+  .btn:hover { opacity: .9; }
+  .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; }
+  .field { display: flex; flex-direction: column; }
+  .round-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+  .round-bar button {
+    background: #2a2a30; color: #e8e8ea; border: 1px solid #44444c;
+    padding: 7px 14px; border-radius: 6px; cursor: pointer; font-size: 13px;
+  }
+  .round-bar button.active { background: #e0457b; border-color: #e0457b; }
+
+  /* Slot card */
+  .mod-group { margin-bottom: 22px; }
+  .mod-header { font-size: 15px; font-weight: 600; margin: 0 0 8px; padding-left: 8px; border-left: 4px solid #e0457b; }
+  .slot {
+    display: flex; gap: 12px; background: #232329; border: 1px solid #34343c;
+    border-radius: 8px; padding: 10px; margin-bottom: 8px; align-items: center;
+  }
+  .slot .cover {
+    width: 120px; height: 67px; border-radius: 5px; object-fit: cover;
+    background: #34343c; flex-shrink: 0;
+  }
+  .slot .badge {
+    flex-shrink: 0; width: 48px; text-align: center; font-weight: 700; font-size: 13px;
+    padding: 6px 0; border-radius: 5px; color: #fff;
+  }
+  .slot .info { flex: 1; min-width: 0; }
+  .slot .info .title { font-weight: 600; font-size: 15px; }
+  .slot .info .title a { color: #e8e8ea; text-decoration: none; }
+  .slot .info .title a:hover { text-decoration: underline; }
+  .slot .info .sub { font-size: 12px; color: #a0a0a8; }
+  .slot .stats { font-size: 12px; color: #c8c8d0; margin-top: 4px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .slot .stats b { color: #e0457b; }
+  .skills { margin-top: 4px; display: flex; gap: 5px; flex-wrap: wrap; }
+  .skill-tag { background: #34343c; font-size: 11px; padding: 2px 7px; border-radius: 10px; }
+
+  /* Mod colors */
+  .NM { background: #4a8fe0; } .HD { background: #d8b73c; } .HR { background: #e05050; }
+  .DT { background: #9050e0; } .FM { background: #46b06a; } .TB { background: #888; }
+  .EZ { background: #46b0a0; } .FL { background: #555; }
+
+  table.builder { width: 100%; border-collapse: collapse; font-size: 12px; }
+  table.builder th, table.builder td { border: 1px solid #34343c; padding: 5px; text-align: left; }
+  table.builder th { background: #2a2a30; }
+  table.builder input { width: 100%; min-width: 60px; }
+  .muted { color: #a0a0a8; font-size: 12px; }
+  .empty { color: #a0a0a8; padding: 30px; text-align: center; }
+  @media (max-width: 640px) {
+    .slot { flex-wrap: wrap; }
+    .slot .cover { width: 100%; height: auto; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <h1 id="tname">Mappool</h1>
+  <div class="tabs">
+    <button id="tab-viewer" class="active" onclick="setMode('viewer')">Viewer</button>
+    <button id="tab-builder" onclick="setMode('builder')">Builder</button>
+  </div>
+</header>
+<main id="app"></main>
+
+<script>
+const MODS = ["NM","HD","HR","DT","FM","TB","EZ","FL"];
+let state = load();
+let mode = "viewer";
+let activeRound = state.rounds[0]?.id || null;
+
+function load() {
+  try {
+    const raw = localStorage.getItem("mappool-data");
+    if (raw) return JSON.parse(raw);
+  } catch (e) {}
+  return { name: "My Tournament", rounds: [] };
+}
+function save() {
+  try { localStorage.setItem("mappool-data", JSON.stringify(state)); } catch (e) {}
+}
+function uid() { return Math.random().toString(36).slice(2, 9); }
+function esc(s) { return String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+
+function parseOsu(url) {
+  // returns {beatmapId, beatmapsetId}
+  let setId = null, mapId = null;
+  let m = url.match(/beatmapsets\/(\d+)(?:#\w+\/(\d+))?/);
+  if (m) { setId = m[1]; mapId = m[2] || null; }
+  else { m = url.match(/\/b\/(\d+)|beatmaps\/(\d+)/); if (m) mapId = m[1] || m[2]; }
+  return { beatmapsetId: setId, beatmapId: mapId };
+}
+function cover(setId) {
+  return setId ? `https://assets.ppy.sh/beatmaps/${setId}/covers/cover.jpg` : "";
+}
+function mapLink(s) {
+  if (s.beatmapsetId && s.beatmapId) return `https://osu.ppy.sh/beatmapsets/${s.beatmapsetId}#osu/${s.beatmapId}`;
+  if (s.beatmapId) return `https://osu.ppy.sh/beatmaps/${s.beatmapId}`;
+  if (s.beatmapsetId) return `https://osu.ppy.sh/beatmapsets/${s.beatmapsetId}`;
+  return "#";
+}
+
+function setMode(m) {
+  mode = m;
+  document.getElementById("tab-viewer").classList.toggle("active", m === "viewer");
+  document.getElementById("tab-builder").classList.toggle("active", m === "builder");
+  render();
+}
+
+function render() {
+  document.getElementById("tname").textContent = state.name || "Mappool";
+  if (!activeRound && state.rounds[0]) activeRound = state.rounds[0].id;
+  mode === "viewer" ? renderViewer() : renderBuilder();
+}
+
+/* ---------- VIEWER ---------- */
+function renderViewer() {
+  const app = document.getElementById("app");
+  if (!state.rounds.length) {
+    app.innerHTML = `<div class="empty">No rounds yet. Switch to <b>Builder</b> to add a round and some maps.</div>`;
+    return;
+  }
+  const round = state.rounds.find(r => r.id === activeRound) || state.rounds[0];
+  activeRound = round.id;
+
+  let html = `<div class="round-bar">` +
+    state.rounds.map(r => `<button class="${r.id===round.id?'active':''}" onclick="activeRound='${r.id}';render()">${esc(r.name)}</button>`).join("") +
+    `</div>`;
+
+  if (round.mappackUrl) {
+    html += `<p><a class="btn" href="${esc(round.mappackUrl)}" target="_blank" rel="noopener">⬇ Download Mappack</a></p>`;
+  }
+
+  const slots = round.slots || [];
+  if (!slots.length) {
+    html += `<div class="empty">No maps in ${esc(round.name)} yet.</div>`;
+    app.innerHTML = html; return;
+  }
+  // group by mod, in MODS order
+  const order = m => { const i = MODS.indexOf(m); return i === -1 ? 99 : i; };
+  const groups = {};
+  slots.forEach(s => { (groups[s.mod] = groups[s.mod] || []).push(s); });
+  Object.keys(groups).sort((a,b)=>order(a)-order(b)).forEach(mod => {
+    html += `<div class="mod-group"><div class="mod-header">${esc(mod)}</div>`;
+    groups[mod].forEach(s => {
+      const stats = [];
+      if (s.stars)  stats.push(`<b>${esc(s.stars)}★</b>`);
+      if (s.bpm)    stats.push(`${esc(s.bpm)} BPM`);
+      if (s.length) stats.push(`${esc(s.length)}`);
+      if (s.cs)     stats.push(`CS ${esc(s.cs)}`);
+      if (s.ar)     stats.push(`AR ${esc(s.ar)}`);
+      if (s.od)     stats.push(`OD ${esc(s.od)}`);
+      const skills = (s.skills||"").split(",").map(x=>x.trim()).filter(Boolean);
+      html += `<div class="slot">
+        <span class="badge ${esc(s.mod)}">${esc(s.mod)}${esc(s.index||"")}</span>
+        <img class="cover" src="${cover(s.beatmapsetId)}" onerror="this.style.visibility='hidden'" alt="">
+        <div class="info">
+          <div class="title"><a href="${mapLink(s)}" target="_blank" rel="noopener">${esc(s.artist?s.artist+" - ":"")}${esc(s.title||"Untitled")}</a></div>
+          <div class="sub">[${esc(s.difficulty||"?")}] mapped by ${esc(s.mapper||"?")}</div>
+          ${stats.length?`<div class="stats">${stats.join(" ")}</div>`:""}
+          ${skills.length?`<div class="skills">${skills.map(t=>`<span class="skill-tag">${esc(t)}</span>`).join("")}</div>`:""}
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  });
+  app.innerHTML = html;
+}
+
+/* ---------- BUILDER ---------- */
+function renderBuilder() {
+  const app = document.getElementById("app");
+  let html = `
+    <div class="row">
+      <div class="field"><label>Tournament name</label>
+        <input value="${esc(state.name)}" oninput="state.name=this.value;save();document.getElementById('tname').textContent=this.value||'Mappool'"></div>
+      <button class="btn secondary" onclick="exportJSON()">Export JSON</button>
+      <button class="btn secondary" onclick="document.getElementById('imp').click()">Import JSON</button>
+      <input id="imp" type="file" accept="application/json" style="display:none" onchange="importJSON(this)">
+    </div>
+    <div class="row">
+      <div class="field"><label>New round name</label><input id="newRound" placeholder="e.g. Quarterfinals"></div>
+      <button class="btn" onclick="addRound()">+ Add round</button>
+    </div>`;
+
+  if (!state.rounds.length) {
+    html += `<div class="empty">No rounds yet — add one above.</div>`;
+    app.innerHTML = html; return;
+  }
+
+  html += `<div class="round-bar">` +
+    state.rounds.map(r => `<button class="${r.id===activeRound?'active':''}" onclick="activeRound='${r.id}';render()">${esc(r.name)}</button>`).join("") +
+    `</div>`;
+
+  const round = state.rounds.find(r => r.id === activeRound) || state.rounds[0];
+  activeRound = round.id;
+
+  html += `<div class="row">
+      <div class="field" style="flex:1;min-width:240px"><label>Mappack download URL</label>
+        <input value="${esc(round.mappackUrl||"")}" oninput="setMappack('${round.id}',this.value)" placeholder="https://..."></div>
+      <button class="btn danger" onclick="deleteRound('${round.id}')">Delete round</button>
+    </div>`;
+
+  html += `<table class="builder"><thead><tr>
+    <th>Mod</th><th>#</th><th>osu! link (auto-fills IDs)</th>
+    <th>Artist</th><th>Title</th><th>Difficulty</th><th>Mapper</th>
+    <th>★</th><th>BPM</th><th>Length</th><th>CS</th><th>AR</th><th>OD</th><th>Skills</th><th></th>
+    </tr></thead><tbody>`;
+
+  (round.slots||[]).forEach(s => {
+    html += `<tr>
+      <td><select onchange="upd('${s._id}','mod',this.value)">${MODS.map(m=>`<option ${m===s.mod?'selected':''}>${m}</option>`).join("")}</select></td>
+      <td><input value="${esc(s.index||"")}" style="width:40px" oninput="upd('${s._id}','index',this.value)"></td>
+      <td><input value="${esc(s._link||"")}" placeholder="paste link" oninput="onLink('${s._id}',this.value)"></td>
+      <td><input value="${esc(s.artist||"")}" oninput="upd('${s._id}','artist',this.value)"></td>
+      <td><input value="${esc(s.title||"")}" oninput="upd('${s._id}','title',this.value)"></td>
+      <td><input value="${esc(s.difficulty||"")}" oninput="upd('${s._id}','difficulty',this.value)"></td>
+      <td><input value="${esc(s.mapper||"")}" oninput="upd('${s._id}','mapper',this.value)"></td>
+      <td><input value="${esc(s.stars||"")}" style="width:50px" oninput="upd('${s._id}','stars',this.value)"></td>
+      <td><input value="${esc(s.bpm||"")}" style="width:55px" oninput="upd('${s._id}','bpm',this.value)"></td>
+      <td><input value="${esc(s.length||"")}" style="width:55px" oninput="upd('${s._id}','length',this.value)"></td>
+      <td><input value="${esc(s.cs||"")}" style="width:45px" oninput="upd('${s._id}','cs',this.value)"></td>
+      <td><input value="${esc(s.ar||"")}" style="width:45px" oninput="upd('${s._id}','ar',this.value)"></td>
+      <td><input value="${esc(s.od||"")}" style="width:45px" oninput="upd('${s._id}','od',this.value)"></td>
+      <td><input value="${esc(s.skills||"")}" placeholder="stream, aim" oninput="upd('${s._id}','skills',this.value)"></td>
+      <td><button class="btn danger" onclick="delSlot('${s._id}')">✕</button></td>
+    </tr>`;
+  });
+  html += `</tbody></table>
+    <div class="row" style="margin-top:10px"><button class="btn" onclick="addSlot('${round.id}')">+ Add map</button>
+    <span class="muted">Tip: paste a beatmap link to auto-fill the beatmap IDs (used for cover art + links). Skills are comma-separated.</span></div>`;
+  app.innerHTML = html;
+}
+
+function addRound() {
+  const name = (document.getElementById("newRound").value || "").trim();
+  if (!name) return;
+  const r = { id: uid(), name, mappackUrl: "", slots: [] };
+  state.rounds.push(r); activeRound = r.id; save(); render();
+}
+function deleteRound(id) {
+  if (!confirm("Delete this round and all its maps?")) return;
+  state.rounds = state.rounds.filter(r => r.id !== id);
+  activeRound = state.rounds[0]?.id || null; save(); render();
+}
+function setMappack(id, v) { const r = state.rounds.find(x=>x.id===id); if (r){ r.mappackUrl=v; save(); } }
+function addSlot(roundId) {
+  const r = state.rounds.find(x=>x.id===roundId); if (!r) return;
+  r.slots.push({ _id: uid(), mod:"NM", index:"", title:"", artist:"", difficulty:"", mapper:"", stars:"", bpm:"", length:"", cs:"", ar:"", od:"", skills:"", beatmapId:null, beatmapsetId:null, _link:"" });
+  save(); renderBuilder();
+}
+function delSlot(sid) {
+  const r = state.rounds.find(x=>x.id===activeRound); if (!r) return;
+  r.slots = r.slots.filter(s => s._id !== sid); save(); renderBuilder();
+}
+function findSlot(sid) {
+  for (const r of state.rounds) { const s = (r.slots||[]).find(x=>x._id===sid); if (s) return s; }
+  return null;
+}
+function upd(sid, field, val) { const s = findSlot(sid); if (s){ s[field]=val; save(); } }
+function onLink(sid, val) {
+  const s = findSlot(sid); if (!s) return;
+  s._link = val;
+  const { beatmapId, beatmapsetId } = parseOsu(val);
+  if (beatmapId) s.beatmapId = beatmapId;
+  if (beatmapsetId) s.beatmapsetId = beatmapsetId;
+  save();
+}
+
+function exportJSON() {
+  const blob = new Blob([JSON.stringify(state, null, 2)], { type: "application/json" });
+  const a = document.createElement("a");
+  a.href = URL.createObjectURL(blob);
+  a.download = (state.name || "mappool").replace(/\s+/g,"_") + ".json";
+  a.click();
+}
+function importJSON(input) {
+  const file = input.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const data = JSON.parse(reader.result);
+      if (!data.rounds) throw new Error("bad file");
+      state = data; activeRound = state.rounds[0]?.id || null;
+      save(); render();
+    } catch (e) { alert("Could not read that file."); }
+  };
+  reader.readAsText(file);
+  input.value = "";
+}
+
+render();
+</script>
+</body>
+</html>
