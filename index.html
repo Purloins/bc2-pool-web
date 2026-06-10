@@ -54,6 +54,7 @@
   .slot .stats b { color: var(--blue-dark); }
   .skills { margin-top: 4px; display: flex; gap: 5px; flex-wrap: wrap; }
   .skill-tag { background: var(--amber-bg); color: var(--amber-ink); border: 1px solid var(--amber-line); font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+  .modchip { display: inline-block; color: #fff; font-size: 10px; font-weight: 700; letter-spacing: .3px; padding: 1px 6px; border-radius: 4px; vertical-align: middle; }
   .NM { background: #4a8fe0; } .HD { background: #d8a93c; } .HR { background: #e05959; }
   .DT { background: #9461df; } .FM { background: #46b06a; } .TB { background: #7b8794; }
   .EZ { background: #3bb2a0; } .FL { background: #5a6470; }
@@ -68,6 +69,7 @@
   .slot-cell .controls { display: flex; gap: 4px; }
   .slot-badge { display: inline-block; min-width: 44px; text-align: center; font-weight: 700; font-size: 12px; padding: 3px 8px; border-radius: 6px; background: var(--blue-soft); color: var(--blue-dark); border: 1px solid var(--blue-line); }
   .pool-table select.mod { padding: 3px 4px; font-weight: 700; width: 58px; }
+  .pool-table input.lbl { width: 58px; text-align: center; font-weight: 700; color: var(--blue-dark); }
   .pool-table input.idx { width: 38px; text-align: center; }
   .pool-table input.idbox { width: 92px; }
   .pool-table input.skills, .pool-table input.notes { width: 110px; }
@@ -104,6 +106,15 @@ const rowStatus = {}; // sid -> { msg, err } transient fetch status, not persist
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const uid = () => Math.random().toString(36).slice(2, 9);
+
+// Slot identity: a free label ("A1") drives display/grouping; mod still drives stat calc.
+const slotLabel = s => (s.label && String(s.label).trim()) || `${s.mod}${s.index||""}`;
+const prefixOf = l => (String(l).match(/^([A-Za-z]+)/)||[])[1] || String(l);
+const numOf = l => parseInt((String(l).match(/(\d+)\s*$/)||[])[1]||"0", 10);
+function newSlot(label) {
+  return { _id: uid(), mod:"NM", index:"", label: label||"", title:"", artist:"", difficulty:"", mapper:"",
+    stars:"", bpm:"", length:"", cs:"", ar:"", od:"", hp:"", skills:"", comment:"", beatmapId:null, beatmapsetId:null };
+}
 
 function parseOsu(url) {
   let setId = null, mapId = null, m;
@@ -176,19 +187,24 @@ function renderViewer() {
   if (round.mappackUrl) html += `<p><a class="btn" href="${esc(round.mappackUrl)}" target="_blank" rel="noopener">⬇ Download mappack</a></p>`;
   const slots = round.slots || [];
   if (!slots.length) { app.innerHTML = html + `<div class="empty">No maps in ${esc(round.name)} yet.</div>`; return; }
-  const order = m => { const i = MODS.indexOf(m); return i === -1 ? 99 : i; };
-  const groups = {};
-  slots.forEach(s => (groups[s.mod] = groups[s.mod] || []).push(s));
-  Object.keys(groups).sort((a,b)=>order(a)-order(b)).forEach(mod => {
-    html += `<div class="mod-group"><div class="mod-header">${esc(mod)}</div>`;
-    groups[mod].forEach(s => {
+  // group by the label's letter prefix (e.g. A1..A20 -> "A"; NM1.. -> "NM")
+  const groups = {}, groupOrder = [];
+  slots.forEach(s => {
+    const p = prefixOf(slotLabel(s));
+    if (!groups[p]) { groups[p] = []; groupOrder.push(p); }
+    groups[p].push(s);
+  });
+  groupOrder.forEach(p => {
+    const arr = groups[p].slice().sort((a,b) => numOf(slotLabel(a)) - numOf(slotLabel(b)));
+    html += `<div class="mod-group"><div class="mod-header">${esc(p)}</div>`;
+    arr.forEach(s => {
       const stats = statLine(s);
       const skills = (s.skills||"").split(",").map(x=>x.trim()).filter(Boolean);
       html += `<div class="slot">
-        <span class="badge ${esc(s.mod)}">${esc(s.mod)}${esc(s.index||"")}</span>
+        <span class="badge ${esc(s.mod)}">${esc(slotLabel(s))}</span>
         <img class="cover" src="${cover(s.beatmapsetId)}" onerror="this.style.visibility='hidden'" alt="">
         <div class="info">
-          <div class="title"><a href="${mapLink(s)}" target="_blank" rel="noopener">${esc(s.artist?s.artist+" - ":"")}${esc(s.title||"Untitled")}</a></div>
+          <div class="title"><span class="modchip ${esc(s.mod)}">${esc(s.mod)}</span> <a href="${mapLink(s)}" target="_blank" rel="noopener">${esc(s.artist?s.artist+" - ":"")}${esc(s.title||"Untitled")}</a></div>
           <div class="sub">[${esc(s.difficulty||"?")}] mapped by ${esc(s.mapper||"?")}</div>
           ${stats.length?`<div class="stats">${stats.join(" ")}</div>`:""}
           ${skills.length?`<div class="skills">${skills.map(t=>`<span class="skill-tag">${esc(t)}</span>`).join("")}</div>`:""}
@@ -227,6 +243,12 @@ function renderBuilder() {
       <div class="field" style="flex:1;min-width:240px"><label>Mappack URL</label>
         <input value="${esc(round.mappackUrl||"")}" oninput="setRound('${round.id}','mappackUrl',this.value)" placeholder="https://..."></div>
       <button class="btn danger" onclick="deleteRound('${round.id}')">Delete round</button>
+    </div>
+    <div class="row">
+      <div class="field"><label>Slot prefix</label><input id="slotPrefix" value="${esc(round.slotPrefix ?? 'A')}" style="width:70px"></div>
+      <div class="field"><label>Maps per pool</label><input id="slotCount" type="number" min="0" value="${(round.slots||[]).length}" style="width:100px"></div>
+      <button class="btn secondary" onclick="setSlots('${round.id}')">Generate slots</button>
+      <span class="muted">Creates labelled slots (e.g. A1–A20). Existing maps are kept; reducing the count trims from the end.</span>
     </div>`;
   html += `<div style="overflow-x:auto"><table class="pool-table"><thead><tr>
     <th>Slot</th><th>Beatmap ID</th><th>Banner</th><th>Map info</th><th>Mapper</th>
@@ -240,11 +262,9 @@ function renderBuilder() {
     const num = v => (v != null && v !== "") ? esc(v) : "—";
     html += `<tr>
       <td><div class="slot-cell">
-        <span class="slot-badge">${esc(s.mod)}${esc(s.index||"")}</span>
-        <div class="controls">
-          <select class="mod" onchange="onModChange('${s._id}',this.value)">${MODS.map(m=>`<option ${m===s.mod?'selected':''}>${m}</option>`).join("")}</select>
-          <input class="idx" value="${esc(s.index||"")}" placeholder="#" oninput="upd('${s._id}','index',this.value)">
-        </div></div></td>
+        <input class="lbl" value="${esc(slotLabel(s))}" title="slot label" onchange="upd('${s._id}','label',this.value)">
+        <select class="mod" title="mod (for stat calc)" onchange="onModChange('${s._id}',this.value)">${MODS.map(m=>`<option ${m===s.mod?'selected':''}>${m}</option>`).join("")}</select>
+      </div></td>
       <td><input class="idbox" value="${esc(s.beatmapId||"")}" placeholder="id" onchange="onIdInput('${s._id}',this.value)"></td>
       <td>${s.beatmapsetId?`<img class="banner" src="${banner(s.beatmapsetId)}" onerror="this.style.visibility='hidden'" alt="">`:`<div class="banner"></div>`}</td>
       <td class="map-info">${info}</td>
@@ -280,8 +300,20 @@ function deleteRound(id) {
 function setRound(id, field, v) { const r = pool.rounds.find(x=>x.id===id); if (r){ r[field]=v; savePool(); } }
 function addSlot(roundId) {
   const r = pool.rounds.find(x=>x.id===roundId); if (!r) return;
-  r.slots.push({ _id: uid(), mod:"NM", index:"", title:"", artist:"", difficulty:"", mapper:"", stars:"", bpm:"", length:"", cs:"", ar:"", od:"", hp:"", skills:"", comment:"", beatmapId:null, beatmapsetId:null });
+  const label = (r.slotPrefix != null) ? `${r.slotPrefix}${r.slots.length+1}` : "";
+  r.slots.push(newSlot(label));
   savePool(); renderBuilder();
+}
+function setSlots(roundId) {
+  const r = pool.rounds.find(x=>x.id===roundId); if (!r) return;
+  const prefix = document.getElementById("slotPrefix").value.trim();
+  const count = Math.max(0, parseInt(document.getElementById("slotCount").value || "0", 10));
+  if (count < r.slots.length && !confirm(`Reduce to ${count} maps? This removes the last ${r.slots.length - count} map(s) and their data.`)) return;
+  r.slotPrefix = prefix;
+  while (r.slots.length < count) r.slots.push(newSlot());
+  r.slots.length = count;
+  r.slots.forEach((s, i) => { s.label = `${prefix}${i+1}`; });
+  savePool(true); renderBuilder();
 }
 function delSlot(sid) {
   const r = pool.rounds.find(x=>x.id===activeRound); if (!r) return;
@@ -393,7 +425,8 @@ function addSuggestionToPool(payload) {
   const s = JSON.parse(decodeURIComponent(payload));
   let r = pool.rounds.find(x => x.name === s.round) || pool.rounds[0];
   if (!r) { alert("Create a round first (Builder tab)."); return; }
-  r.slots.push({ _id: uid(), mod: s.mod||"NM", index: "", title: s.title||"", artist: s.artist||"", difficulty: s.difficulty||"",
+  const label = (r.slotPrefix != null) ? `${r.slotPrefix}${r.slots.length+1}` : "";
+  r.slots.push({ _id: uid(), mod: s.mod||"NM", index: "", label, title: s.title||"", artist: s.artist||"", difficulty: s.difficulty||"",
     mapper: s.mapper||"", stars: s.stars ?? "", bpm: s.bpm ?? "", length: s.length||"", cs: s.cs ?? "", ar: s.ar ?? "", od: s.od ?? "", hp: s.hp ?? "",
     skills: "", comment: s.comment||"", beatmapId: s.beatmapId||null, beatmapsetId: s.beatmapsetId||null });
   savePool(true);
