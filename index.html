@@ -5,52 +5,82 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Mappool</title>
 <style>
+  :root {
+    --bg: #eef4f8; --surface: #ffffff; --border: #dbe5ec;
+    --ink: #2b3036; --muted: #788591; --link: #2f7fa0;
+    --blue: #4aa3c7; --blue-dark: #357f9f; --blue-soft: #e8f4fb; --blue-line: #c4e2f0;
+    --amber-bg: #fdf3da; --amber-ink: #93741c; --amber-line: #ecd9a0;
+    --red: #e25c5c; --red-dark: #cf4a4a;
+    --row-alt: #f4fafd;
+  }
   * { box-sizing: border-box; }
-  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; margin: 0; background: #1a1a1e; color: #e8e8ea; line-height: 1.45; }
-  header { background: #232329; padding: 12px 16px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid #34343c; }
-  header h1 { font-size: 18px; margin: 0; margin-right: auto; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, sans-serif; margin: 0; background: var(--bg); color: var(--ink); line-height: 1.45; }
+  header { background: var(--surface); padding: 12px 18px; display: flex; align-items: center; gap: 16px; flex-wrap: wrap; border-bottom: 1px solid var(--border); box-shadow: 0 1px 3px rgba(0,0,0,.04); }
+  header h1 { font-size: 18px; margin: 0; margin-right: auto; letter-spacing: .3px; }
   .tabs { display: flex; gap: 4px; }
-  .tabs button { background: #34343c; color: #e8e8ea; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 14px; }
-  .tabs button.active { background: #e0457b; }
+  .tabs button { background: #eef3f6; color: var(--ink); border: 1px solid var(--border); padding: 7px 14px; border-radius: 7px; cursor: pointer; font-size: 14px; }
+  .tabs button.active { background: var(--blue); color: #fff; border-color: var(--blue); }
   .user { display: flex; align-items: center; gap: 8px; font-size: 13px; }
   .user img { width: 28px; height: 28px; border-radius: 50%; }
-  .pill { font-size: 11px; background: #34343c; padding: 2px 8px; border-radius: 10px; text-transform: uppercase; }
-  main { padding: 16px; max-width: 1000px; margin: 0 auto; }
-  input, select { background: #2a2a30; color: #e8e8ea; border: 1px solid #44444c; border-radius: 5px; padding: 6px 8px; font-size: 13px; }
-  label { font-size: 12px; color: #a0a0a8; display: block; margin-bottom: 3px; }
-  .btn { background: #e0457b; color: #fff; border: none; padding: 8px 14px; border-radius: 6px; cursor: pointer; font-size: 14px; text-decoration: none; display: inline-block; }
-  .btn.secondary { background: #34343c; } .btn.danger { background: #7a2a2a; }
-  .btn:hover { opacity: .9; }
+  .pill { font-size: 11px; background: var(--blue-soft); color: var(--blue-dark); border: 1px solid var(--blue-line); padding: 2px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: .4px; }
+  main { padding: 18px; max-width: 1180px; margin: 0 auto; }
+  input, select { background: #fff; color: var(--ink); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 13px; }
+  input:focus, select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 2px rgba(74,163,199,.18); }
+  label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 3px; }
+  .btn { background: var(--blue); color: #fff; border: 1px solid var(--blue); padding: 8px 14px; border-radius: 7px; cursor: pointer; font-size: 14px; text-decoration: none; display: inline-block; }
+  .btn.secondary { background: #eef3f6; color: var(--ink); border-color: var(--border); }
+  .btn.danger { background: var(--red); border-color: var(--red); }
+  .btn.danger:hover { background: var(--red-dark); }
+  .btn:hover { filter: brightness(.97); }
+  .btn.sm { padding: 5px 10px; font-size: 13px; }
   .row { display: flex; gap: 10px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; }
   .field { display: flex; flex-direction: column; }
   .round-bar { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
-  .round-bar button { background: #2a2a30; color: #e8e8ea; border: 1px solid #44444c; padding: 7px 14px; border-radius: 6px; cursor: pointer; font-size: 13px; }
-  .round-bar button.active { background: #e0457b; border-color: #e0457b; }
+  .round-bar button { background: #fff; color: var(--ink); border: 1px solid var(--border); padding: 7px 14px; border-radius: 7px; cursor: pointer; font-size: 13px; }
+  .round-bar button.active { background: var(--blue); border-color: var(--blue); color: #fff; }
+
+  /* viewer cards */
   .mod-group { margin-bottom: 22px; }
-  .mod-header { font-size: 15px; font-weight: 600; margin: 0 0 8px; padding-left: 8px; border-left: 4px solid #e0457b; }
-  .slot { display: flex; gap: 12px; background: #232329; border: 1px solid #34343c; border-radius: 8px; padding: 10px; margin-bottom: 8px; align-items: center; }
-  .slot .cover { width: 120px; height: 67px; border-radius: 5px; object-fit: cover; background: #34343c; flex-shrink: 0; }
-  .slot .badge { flex-shrink: 0; width: 48px; text-align: center; font-weight: 700; font-size: 13px; padding: 6px 0; border-radius: 5px; color: #fff; }
+  .mod-header { font-size: 15px; font-weight: 700; margin: 0 0 8px; padding-left: 8px; border-left: 4px solid var(--blue); }
+  .slot { display: flex; gap: 12px; background: var(--surface); border: 1px solid var(--border); border-radius: 8px; padding: 10px; margin-bottom: 8px; align-items: center; }
+  .slot .cover { width: 120px; height: 67px; border-radius: 5px; object-fit: cover; background: #e6eef3; flex-shrink: 0; }
+  .slot .badge { flex-shrink: 0; width: 50px; text-align: center; font-weight: 700; font-size: 13px; padding: 6px 0; border-radius: 6px; color: #fff; }
   .slot .info { flex: 1; min-width: 0; }
-  .slot .info .title { font-weight: 600; font-size: 15px; }
-  .slot .info .title a { color: #e8e8ea; text-decoration: none; }
-  .slot .info .sub { font-size: 12px; color: #a0a0a8; }
-  .slot .stats { font-size: 12px; color: #c8c8d0; margin-top: 4px; display: flex; gap: 12px; flex-wrap: wrap; }
-  .slot .stats b { color: #e0457b; }
+  .slot .info .title { font-weight: 700; font-size: 15px; }
+  .slot .info .title a { color: var(--ink); text-decoration: none; }
+  .slot .info .title a:hover { color: var(--link); }
+  .slot .info .sub { font-size: 12px; color: var(--muted); }
+  .slot .stats { font-size: 12px; color: #4a555f; margin-top: 4px; display: flex; gap: 12px; flex-wrap: wrap; }
+  .slot .stats b { color: var(--blue-dark); }
   .skills { margin-top: 4px; display: flex; gap: 5px; flex-wrap: wrap; }
-  .skill-tag { background: #34343c; font-size: 11px; padding: 2px 7px; border-radius: 10px; }
-  .NM { background: #4a8fe0; } .HD { background: #d8b73c; } .HR { background: #e05050; }
-  .DT { background: #9050e0; } .FM { background: #46b06a; } .TB { background: #888; }
-  .EZ { background: #46b0a0; } .FL { background: #555; }
-  table.builder { width: 100%; border-collapse: collapse; font-size: 12px; }
-  table.builder th, table.builder td { border: 1px solid #34343c; padding: 5px; }
-  table.builder th { background: #2a2a30; }
-  table.builder input { width: 100%; min-width: 50px; }
-  table.builder .auto { color: #8a8; }
-  .card { background: #232329; border: 1px solid #34343c; border-radius: 8px; padding: 12px; margin-bottom: 10px; }
-  .muted { color: #a0a0a8; font-size: 12px; }
-  .empty { color: #a0a0a8; padding: 30px; text-align: center; }
-  .save-state { font-size: 12px; color: #46b06a; }
+  .skill-tag { background: var(--amber-bg); color: var(--amber-ink); border: 1px solid var(--amber-line); font-size: 11px; padding: 2px 8px; border-radius: 10px; }
+  .NM { background: #4a8fe0; } .HD { background: #d8a93c; } .HR { background: #e05959; }
+  .DT { background: #9461df; } .FM { background: #46b06a; } .TB { background: #7b8794; }
+  .EZ { background: #3bb2a0; } .FL { background: #5a6470; }
+
+  /* builder table */
+  .pool-table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 13px; }
+  .pool-table thead th { background: var(--blue); color: #fff; font-size: 11px; letter-spacing: .6px; text-transform: uppercase; font-weight: 700; padding: 11px 8px; text-align: left; white-space: nowrap; }
+  .pool-table tbody td { padding: 8px; border-top: 1px solid var(--border); vertical-align: middle; }
+  .pool-table tbody tr:nth-child(even) { background: var(--row-alt); }
+  .pool-table .banner { width: 56px; height: 40px; object-fit: cover; border-radius: 4px; background: #e6eef3; display: block; }
+  .pool-table .slot-cell { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+  .slot-badge { display: inline-block; min-width: 44px; text-align: center; font-weight: 700; font-size: 12px; padding: 3px 8px; border-radius: 6px; background: var(--blue-soft); color: var(--blue-dark); border: 1px solid var(--blue-line); }
+  .pool-table select.mod { padding: 3px 6px; font-weight: 700; }
+  .pool-table input.idbox { width: 96px; }
+  .pool-table input.idx { width: 34px; }
+  .pool-table input.stat { width: 48px; text-align: center; }
+  .pool-table input.skills, .pool-table input.notes { width: 100%; min-width: 110px; }
+  .pool-table input.skills { background: var(--amber-bg); border-color: var(--amber-line); color: var(--amber-ink); }
+  .map-info .t { font-weight: 700; }
+  .map-info .a { color: var(--link); font-size: 12px; }
+  .map-info .d { color: var(--muted); font-size: 12px; }
+  .sr { font-weight: 700; color: var(--blue-dark); white-space: nowrap; }
+
+  .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 10px; }
+  .muted { color: var(--muted); font-size: 12px; }
+  .empty { color: var(--muted); padding: 30px; text-align: center; }
+  .save-state { font-size: 12px; color: #3a9a5c; }
   @media (max-width: 640px) { .slot { flex-wrap: wrap; } .slot .cover { width: 100%; height: auto; } }
 </style>
 </head>
@@ -65,7 +95,7 @@
 <script>
 const MODS = ["NM","HD","HR","DT","FM","TB","EZ","FL"];
 let me = null, pool = { name: "Mappool", rounds: [] }, view = "viewer", activeRound = null, saveTimer = null;
-let sgStats = null; // last fetched stats for the suggest form
+let sgStats = null;
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -77,6 +107,7 @@ function parseOsu(url) {
   return { beatmapsetId: setId, beatmapId: mapId };
 }
 const cover = id => id ? `https://assets.ppy.sh/beatmaps/${id}/covers/cover.jpg` : "";
+const banner = id => id ? `https://assets.ppy.sh/beatmaps/${id}/covers/list.jpg` : "";
 function mapLink(s) {
   if (s.beatmapsetId && s.beatmapId) return `https://osu.ppy.sh/beatmapsets/${s.beatmapsetId}#osu/${s.beatmapId}`;
   if (s.beatmapId) return `https://osu.ppy.sh/beatmaps/${s.beatmapId}`;
@@ -116,7 +147,7 @@ function render() {
   document.getElementById("tname").textContent = pool.name || "Mappool";
   const ub = document.getElementById("userbox");
   ub.innerHTML = me
-    ? `<img src="${esc(me.avatar_url||"")}" alt=""><span>${esc(me.username)}</span><span class="pill">${esc(me.role)}</span><a class="btn secondary" href="/api/auth/logout">Logout</a>`
+    ? `<img src="${esc(me.avatar_url||"")}" alt=""><span>${esc(me.username)}</span><span class="pill">${esc(me.role)}</span><a class="btn secondary sm" href="/api/auth/logout">Logout</a>`
     : `<a class="btn" href="/api/auth/login">Login with osu!</a>`;
   const tabs = [["viewer","Viewer"]];
   if (canSuggest()) tabs.push(["suggest","Suggestions"]);
@@ -125,7 +156,6 @@ function render() {
   document.getElementById("tabs").innerHTML = tabs.map(([k,l]) => `<button class="${k===view?'active':''}" onclick="view='${k}';render()">${l}</button>`).join("");
   ({ viewer: renderViewer, builder: renderBuilder, suggest: renderSuggest, admin: renderAdmin }[view])();
 }
-
 function roundBar(active, varName) {
   return `<div class="round-bar">` + pool.rounds.map(r =>
     `<button class="${r.id===active.id?'active':''}" onclick="${varName}='${r.id}';render()">${esc(r.name)}</button>`).join("") + `</div>`;
@@ -138,7 +168,7 @@ function renderViewer() {
   const round = pool.rounds.find(r => r.id === activeRound) || pool.rounds[0];
   activeRound = round.id;
   let html = roundBar(round, "activeRound");
-  if (round.mappackUrl) html += `<p><a class="btn" href="${esc(round.mappackUrl)}" target="_blank" rel="noopener">⬇ Download Mappack</a></p>`;
+  if (round.mappackUrl) html += `<p><a class="btn" href="${esc(round.mappackUrl)}" target="_blank" rel="noopener">⬇ Download mappack</a></p>`;
   const slots = round.slots || [];
   if (!slots.length) { app.innerHTML = html + `<div class="empty">No maps in ${esc(round.name)} yet.</div>`; return; }
   const order = m => { const i = MODS.indexOf(m); return i === -1 ? 99 : i; };
@@ -184,7 +214,7 @@ function renderBuilder() {
       <button class="btn" onclick="addRound()">+ Add round</button>
       <span id="savestate" class="save-state"></span>
     </div>`;
-  if (!pool.rounds.length) { app.innerHTML = html + `<div class="empty">No rounds yet.</div>`; return; }
+  if (!pool.rounds.length) { app.innerHTML = html + `<div class="empty">No rounds yet — add one to start building.</div>`; return; }
   const round = pool.rounds.find(r => r.id === activeRound) || pool.rounds[0];
   activeRound = round.id;
   html += roundBar(round, "activeRound");
@@ -193,30 +223,40 @@ function renderBuilder() {
         <input value="${esc(round.mappackUrl||"")}" oninput="setRound('${round.id}','mappackUrl',this.value)" placeholder="https://..."></div>
       <button class="btn danger" onclick="deleteRound('${round.id}')">Delete round</button>
     </div>`;
-  html += `<div style="overflow-x:auto"><table class="builder"><thead><tr>
-    <th>Mod</th><th>#</th><th>osu! link</th><th>Title (auto)</th>
-    <th>★</th><th>BPM</th><th>Len</th><th>CS</th><th>AR</th><th>OD</th><th>HP</th><th>Skills</th><th></th></tr></thead><tbody>`;
+  html += `<div style="overflow-x:auto"><table class="pool-table"><thead><tr>
+    <th>Slot</th><th>Beatmap ID</th><th>Banner</th><th>Map info</th><th>Mapper</th>
+    <th>SR</th><th>BPM</th><th>Length</th><th>CS</th><th>AR</th><th>OD</th><th>HP</th>
+    <th>Skills</th><th>Comments</th><th>Actions</th></tr></thead><tbody>`;
   (round.slots||[]).forEach(s => {
     html += `<tr>
-      <td><select onchange="onModChange('${s._id}',this.value)">${MODS.map(m=>`<option ${m===s.mod?'selected':''}>${m}</option>`).join("")}</select></td>
-      <td><input value="${esc(s.index||"")}" style="width:36px" oninput="upd('${s._id}','index',this.value)"></td>
-      <td><input value="${esc(s._link||"")}" placeholder="paste link" onchange="onLink('${s._id}',this.value)"></td>
-      <td><input class="auto" value="${esc(s.artist?s.artist+' - ':'')}${esc(s.title||'')}" title="auto-filled" readonly></td>
-      <td><input value="${esc(s.stars ?? '')}" style="width:48px" oninput="upd('${s._id}','stars',this.value)"></td>
-      <td><input value="${esc(s.bpm ?? '')}" style="width:52px" oninput="upd('${s._id}','bpm',this.value)"></td>
-      <td><input value="${esc(s.length ?? '')}" style="width:50px" oninput="upd('${s._id}','length',this.value)"></td>
-      <td><input value="${esc(s.cs ?? '')}" style="width:42px" oninput="upd('${s._id}','cs',this.value)"></td>
-      <td><input value="${esc(s.ar ?? '')}" style="width:42px" oninput="upd('${s._id}','ar',this.value)"></td>
-      <td><input value="${esc(s.od ?? '')}" style="width:42px" oninput="upd('${s._id}','od',this.value)"></td>
-      <td><input value="${esc(s.hp ?? '')}" style="width:42px" oninput="upd('${s._id}','hp',this.value)"></td>
-      <td><input value="${esc(s.skills||"")}" placeholder="stream, aim" oninput="upd('${s._id}','skills',this.value)"></td>
+      <td><div class="slot-cell">
+        <span class="slot-badge">${esc(s.mod)}${esc(s.index||"")}</span>
+        <select class="mod" onchange="onModChange('${s._id}',this.value)">${MODS.map(m=>`<option ${m===s.mod?'selected':''}>${m}</option>`).join("")}</select>
+        <input class="idx" value="${esc(s.index||"")}" placeholder="#" oninput="upd('${s._id}','index',this.value)">
+      </div></td>
+      <td><input class="idbox" value="${esc(s.beatmapId||"")}" placeholder="id or link" onchange="onIdInput('${s._id}',this.value)"></td>
+      <td>${s.beatmapsetId?`<img class="banner" src="${banner(s.beatmapsetId)}" onerror="this.style.visibility='hidden'" alt="">`:`<div class="banner"></div>`}</td>
+      <td class="map-info" style="min-width:170px">
+        <div class="t">${esc(s.title||"—")}</div>
+        ${s.artist?`<div class="a">${esc(s.artist)}</div>`:""}
+        ${s.difficulty?`<div class="d">[${esc(s.difficulty)}]</div>`:""}</td>
+      <td>${esc(s.mapper||"")}</td>
+      <td class="sr">${s.stars!=null&&s.stars!==""?"★"+esc(s.stars):""}</td>
+      <td><input class="stat" value="${esc(s.bpm ?? '')}" oninput="upd('${s._id}','bpm',this.value)"></td>
+      <td><input class="stat" value="${esc(s.length ?? '')}" oninput="upd('${s._id}','length',this.value)"></td>
+      <td><input class="stat" value="${esc(s.cs ?? '')}" oninput="upd('${s._id}','cs',this.value)"></td>
+      <td><input class="stat" value="${esc(s.ar ?? '')}" oninput="upd('${s._id}','ar',this.value)"></td>
+      <td><input class="stat" value="${esc(s.od ?? '')}" oninput="upd('${s._id}','od',this.value)"></td>
+      <td><input class="stat" value="${esc(s.hp ?? '')}" oninput="upd('${s._id}','hp',this.value)"></td>
+      <td><input class="skills" value="${esc(s.skills||"")}" placeholder="Aim, Tech" oninput="upd('${s._id}','skills',this.value)"></td>
+      <td><input class="notes" value="${esc(s.comment||"")}" placeholder="Notes…" oninput="upd('${s._id}','comment',this.value)"></td>
       <td style="white-space:nowrap">
-        <button class="btn secondary" title="Re-fetch stats" onclick="fetchSlot('${s._id}')">↻</button>
-        <button class="btn danger" onclick="delSlot('${s._id}')">✕</button></td></tr>`;
+        <button class="btn secondary sm" title="Re-fetch stats" onclick="fetchSlot('${s._id}')">↻</button>
+        <button class="btn danger sm" onclick="delSlot('${s._id}')">Remove</button></td></tr>`;
   });
   html += `</tbody></table></div>
     <div class="row" style="margin-top:10px"><button class="btn" onclick="addSlot('${round.id}')">+ Add map</button>
-    <span class="muted">Paste a difficulty link (with #osu/&lt;id&gt;) — stats auto-fill and recalc when you change the mod. ↻ re-fetches. Fields stay editable for manual overrides.</span></div>`;
+    <span class="muted">Enter a beatmap (difficulty) ID — banner and stats fill automatically and recalc when you change the mod. ★ SR and stats stay editable for manual overrides.</span></div>`;
   app.innerHTML = html;
 }
 function addRound() {
@@ -232,7 +272,7 @@ function deleteRound(id) {
 function setRound(id, field, v) { const r = pool.rounds.find(x=>x.id===id); if (r){ r[field]=v; savePool(); } }
 function addSlot(roundId) {
   const r = pool.rounds.find(x=>x.id===roundId); if (!r) return;
-  r.slots.push({ _id: uid(), mod:"NM", index:"", title:"", artist:"", difficulty:"", mapper:"", stars:"", bpm:"", length:"", cs:"", ar:"", od:"", hp:"", skills:"", beatmapId:null, beatmapsetId:null, _link:"" });
+  r.slots.push({ _id: uid(), mod:"NM", index:"", title:"", artist:"", difficulty:"", mapper:"", stars:"", bpm:"", length:"", cs:"", ar:"", od:"", hp:"", skills:"", comment:"", beatmapId:null, beatmapsetId:null });
   savePool(); renderBuilder();
 }
 function delSlot(sid) {
@@ -241,29 +281,27 @@ function delSlot(sid) {
 }
 function findSlot(sid) { for (const r of pool.rounds){ const s=(r.slots||[]).find(x=>x._id===sid); if (s) return s; } return null; }
 function upd(sid, field, v) { const s = findSlot(sid); if (s){ s[field]=v; savePool(); } }
-function onLink(sid, v) {
-  const s = findSlot(sid); if (!s) return; s._link = v;
+function onIdInput(sid, v) {
+  const s = findSlot(sid); if (!s) return;
   const ids = parseOsu(v);
-  if (ids.beatmapId) s.beatmapId = ids.beatmapId;
+  const id = ids.beatmapId || (/^\d+$/.test(v.trim()) ? v.trim() : null);
+  s.beatmapId = id;
   if (ids.beatmapsetId) s.beatmapsetId = ids.beatmapsetId;
   savePool();
-  if (s.beatmapId) fetchSlot(sid);   // auto-fill on paste
+  if (id) fetchSlot(sid); else renderBuilder();
 }
 function onModChange(sid, v) {
   const s = findSlot(sid); if (!s) return; s.mod = v; savePool();
-  if (s.beatmapId) fetchSlot(sid);   // recalc stats for the new mod
-  else renderBuilder();
+  if (s.beatmapId) fetchSlot(sid); else renderBuilder();
 }
 async function fetchSlot(sid) {
   const s = findSlot(sid); if (!s) return;
-  if (!s.beatmapId) { alert("Paste a difficulty link first (it must contain #osu/<id>)."); return; }
+  if (!s.beatmapId) { alert("Enter a beatmap (difficulty) ID first."); return; }
   const el = document.getElementById("savestate"); if (el) el.textContent = "Fetching…";
   try {
     const d = await fetchStats(s.beatmapId, s.mod);
-    Object.assign(s, {
-      beatmapsetId: d.beatmapsetId, title: d.title, artist: d.artist, mapper: d.mapper,
-      difficulty: d.difficulty, cs: d.cs, ar: d.ar, od: d.od, hp: d.hp, bpm: d.bpm, length: d.length, stars: d.stars,
-    });
+    Object.assign(s, { beatmapsetId: d.beatmapsetId, title: d.title, artist: d.artist, mapper: d.mapper,
+      difficulty: d.difficulty, cs: d.cs, ar: d.ar, od: d.od, hp: d.hp, bpm: d.bpm, length: d.length, stars: d.stars });
     savePool(true); renderBuilder();
   } catch (e) { if (el) el.textContent = "Fetch failed: " + e.message; }
 }
@@ -279,32 +317,32 @@ async function renderSuggest() {
     <div class="row">
       <div class="field"><label>Round</label><select id="sg-round"><option value="">—</option>${roundOpts}</select></div>
       <div class="field"><label>Mod</label><select id="sg-mod" onchange="sgFetch()">${MODS.map(m=>`<option>${m}</option>`).join("")}</select></div>
-      <div class="field" style="flex:1;min-width:220px"><label>osu! difficulty link</label><input id="sg-link" placeholder="https://osu.ppy.sh/beatmapsets/..#osu/.." onchange="sgFetch()"></div>
+      <div class="field" style="flex:1;min-width:220px"><label>Beatmap ID or link</label><input id="sg-link" placeholder="5536758 or full link" onchange="sgFetch()"></div>
     </div>
     <div id="sg-preview" class="muted"></div>
     <div class="row" style="margin-top:8px">
       <div class="field" style="flex:2;min-width:220px"><label>Comment</label><input id="sg-comment" placeholder="why this map?"></div>
-      <button class="btn" onclick="submitSuggestion()">Submit</button>
+      <button class="btn" onclick="submitSuggestion()">Submit suggestion</button>
     </div></div>`;
   html += `<h3>Suggestions (${list.length})</h3>`;
-  if (!list.length) html += `<div class="empty">No suggestions yet.</div>`;
+  if (!list.length) html += `<div class="empty">No suggestions yet. Add the first one above.</div>`;
   list.forEach(s => {
     const stats = statLine(s);
     const payload = encodeURIComponent(JSON.stringify(s));
     html += `<div class="card"><div style="display:flex;gap:12px;align-items:center">
-      ${s.beatmapsetId?`<img class="cover" src="${cover(s.beatmapsetId)}" onerror="this.style.display='none'" alt="">`:""}
+      ${s.beatmapsetId?`<img class="cover" style="width:96px;height:54px;border-radius:5px;object-fit:cover" src="${cover(s.beatmapsetId)}" onerror="this.style.display='none'" alt="">`:""}
       <div style="flex:1;min-width:0">
-        <div><span class="badge ${esc(s.mod)}" style="display:inline-block;width:auto;padding:2px 8px">${esc(s.mod)}</span>
+        <div><span class="badge ${esc(s.mod)}" style="display:inline-block;width:auto;padding:2px 8px;color:#fff;border-radius:6px;font-size:12px">${esc(s.mod)}</span>
           ${s.round?`<span class="pill">${esc(s.round)}</span>`:""}
           ${s.link?`<a href="${esc(s.link)}" target="_blank" rel="noopener">${esc((s.artist?s.artist+' - ':'')+(s.title||s.link))}</a>`:esc(s.title)}
           ${s.difficulty?`<span class="muted"> [${esc(s.difficulty)}]</span>`:""}</div>
-        ${stats.length?`<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:#c8c8d0;margin-top:4px">${stats.join(" ")}</div>`:""}
+        ${stats.length?`<div style="display:flex;gap:12px;flex-wrap:wrap;font-size:12px;color:#4a555f;margin-top:4px">${stats.join(" ")}</div>`:""}
         ${s.comment?`<div class="muted">${esc(s.comment)}</div>`:""}
         <div class="muted">by ${esc(s.by)} · ${new Date(s.at).toLocaleString()}</div>
       </div>
       <div style="display:flex;gap:6px">
-        ${isHost()?`<button class="btn" onclick="addSuggestionToPool('${payload}')">→ Add to pool</button>`:""}
-        ${(isHost()||s.byId===me.id)?`<button class="btn danger" onclick="delSuggestion('${s.id}')">Delete</button>`:""}
+        ${isHost()?`<button class="btn sm" onclick="addSuggestionToPool('${payload}')">→ Add to pool</button>`:""}
+        ${(isHost()||s.byId===me.id)?`<button class="btn danger sm" onclick="delSuggestion('${s.id}')">Delete</button>`:""}
       </div></div></div>`;
   });
   app.innerHTML = html;
@@ -315,28 +353,25 @@ async function sgFetch() {
   const mod = document.getElementById("sg-mod").value;
   const prev = document.getElementById("sg-preview");
   const ids = parseOsu(link);
-  if (!ids.beatmapId) { prev.textContent = link ? "Tip: use a difficulty link containing #osu/<id> to auto-fill stats." : ""; return; }
+  const id = ids.beatmapId || (/^\d+$/.test(link) ? link : null);
+  if (!id) { prev.textContent = link ? "Use a beatmap (difficulty) ID or a link with #osu/<id>." : ""; return; }
   prev.textContent = "Fetching stats…";
   try {
-    const d = await fetchStats(ids.beatmapId, mod);
+    const d = await fetchStats(id, mod);
     sgStats = d;
     prev.innerHTML = `<b>${esc(d.artist)} - ${esc(d.title)}</b> [${esc(d.difficulty)}] · ` + statLine(d).join(" ");
   } catch (e) { prev.textContent = "Could not fetch: " + e.message; }
 }
 async function submitSuggestion() {
-  const link = document.getElementById("sg-link").value.trim();
-  const body = {
-    round: document.getElementById("sg-round").value,
-    mod: document.getElementById("sg-mod").value,
-    link,
-    comment: document.getElementById("sg-comment").value.trim(),
-  };
-  if (sgStats) Object.assign(body, {
-    title: sgStats.title, artist: sgStats.artist, mapper: sgStats.mapper, difficulty: sgStats.difficulty,
-    beatmapId: sgStats.beatmapId, beatmapsetId: sgStats.beatmapsetId,
-    stars: sgStats.stars, bpm: sgStats.bpm, length: sgStats.length, cs: sgStats.cs, ar: sgStats.ar, od: sgStats.od, hp: sgStats.hp,
-  });
-  if (!body.link && !body.title) { alert("Add a link (or at least a title)."); return; }
+  const raw = document.getElementById("sg-link").value.trim();
+  const ids = parseOsu(raw);
+  const link = ids.beatmapId ? raw : (sgStats ? `https://osu.ppy.sh/beatmaps/${sgStats.beatmapId}` : raw);
+  const body = { round: document.getElementById("sg-round").value, mod: document.getElementById("sg-mod").value, link,
+    comment: document.getElementById("sg-comment").value.trim() };
+  if (sgStats) Object.assign(body, { title: sgStats.title, artist: sgStats.artist, mapper: sgStats.mapper, difficulty: sgStats.difficulty,
+    beatmapId: sgStats.beatmapId, beatmapsetId: sgStats.beatmapsetId, stars: sgStats.stars, bpm: sgStats.bpm, length: sgStats.length,
+    cs: sgStats.cs, ar: sgStats.ar, od: sgStats.od, hp: sgStats.hp });
+  if (!body.link && !body.title) { alert("Add a beatmap ID/link (or at least a title)."); return; }
   try { await api("/api/suggestions", { method: "POST", body: JSON.stringify(body) }); sgStats = null; renderSuggest(); }
   catch (e) { alert(e.message); }
 }
@@ -351,7 +386,7 @@ function addSuggestionToPool(payload) {
   if (!r) { alert("Create a round first (Builder tab)."); return; }
   r.slots.push({ _id: uid(), mod: s.mod||"NM", index: "", title: s.title||"", artist: s.artist||"", difficulty: s.difficulty||"",
     mapper: s.mapper||"", stars: s.stars ?? "", bpm: s.bpm ?? "", length: s.length||"", cs: s.cs ?? "", ar: s.ar ?? "", od: s.od ?? "", hp: s.hp ?? "",
-    skills: "", beatmapId: s.beatmapId||null, beatmapsetId: s.beatmapsetId||null, _link: s.link||"" });
+    skills: "", comment: s.comment||"", beatmapId: s.beatmapId||null, beatmapsetId: s.beatmapsetId||null });
   savePool(true);
   alert(`Added to ${r.name}.`);
 }
@@ -366,16 +401,16 @@ async function renderAdmin() {
     <div class="row">
       <div class="field" style="flex:1;min-width:200px"><label>osu! username or user ID</label><input id="rl-key" placeholder="e.g. peppy or 2"></div>
       <div class="field"><label>Role</label><select id="rl-role"><option value="mappooler">mappooler</option><option value="host">host</option></select></div>
-      <button class="btn" onclick="assignRole()">Save</button>
+      <button class="btn" onclick="assignRole()">Save role</button>
     </div>
-    <span class="muted"><b>host</b> = full admin (builder + everything). <b>mappooler</b> = suggest & view suggestions. Everyone else views only.</span>
+    <span class="muted"><b>host</b> — full admin (builder + everything). <b>mappooler</b> — suggest and view suggestions. Everyone else views only.</span>
   </div>`;
   html += `<h3>Current roles (${roles.length})</h3>`;
-  if (!roles.length) html += `<div class="empty">No roles assigned yet. The OWNER_OSU_ID account is always host.</div>`;
+  if (!roles.length) html += `<div class="empty">No roles assigned yet. The owner account is always host.</div>`;
   roles.forEach(r => {
-    html += `<div class="card" style="display:flex;align-items:center;gap:12px">
-      <div style="flex:1"><b>${esc(r.username||r.id)}</b> <span class="muted">(id ${esc(r.id)})</span> — <span class="pill">${esc(r.role)}</span></div>
-      <button class="btn danger" onclick="removeRole('${esc(r.id)}','${esc(r.username||r.id)}')">Remove</button></div>`;
+    html += `<div class="card" style="display:flex;align-items:center;gap:12px;margin-bottom:8px">
+      <div style="flex:1"><b>${esc(r.username||r.id)}</b> <span class="muted">(id ${esc(r.id)})</span> &nbsp;<span class="pill">${esc(r.role)}</span></div>
+      <button class="btn danger sm" onclick="removeRole('${esc(r.id)}','${esc(r.username||r.id)}')">Remove</button></div>`;
   });
   app.innerHTML = html;
 }
