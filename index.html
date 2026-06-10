@@ -23,7 +23,7 @@
   .user { display: flex; align-items: center; gap: 8px; font-size: 13px; }
   .user img { width: 28px; height: 28px; border-radius: 50%; }
   .pill { font-size: 11px; background: var(--blue-soft); color: var(--blue-dark); border: 1px solid var(--blue-line); padding: 2px 8px; border-radius: 10px; text-transform: uppercase; letter-spacing: .4px; }
-  main { padding: 18px; max-width: 1180px; margin: 0 auto; }
+  main { padding: 18px; max-width: 1280px; margin: 0 auto; }
   input, select { background: #fff; color: var(--ink); border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; font-size: 13px; }
   input:focus, select:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 2px rgba(74,163,199,.18); }
   label { font-size: 12px; color: var(--muted); display: block; margin-bottom: 3px; }
@@ -60,22 +60,26 @@
 
   /* builder table */
   .pool-table { width: 100%; border-collapse: separate; border-spacing: 0; background: var(--surface); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; font-size: 13px; }
-  .pool-table thead th { background: var(--blue); color: #fff; font-size: 11px; letter-spacing: .6px; text-transform: uppercase; font-weight: 700; padding: 11px 8px; text-align: left; white-space: nowrap; }
+  .pool-table thead th { background: var(--blue); color: #fff; font-size: 11px; letter-spacing: .5px; text-transform: uppercase; font-weight: 700; padding: 11px 8px; text-align: left; white-space: nowrap; }
   .pool-table tbody td { padding: 8px; border-top: 1px solid var(--border); vertical-align: middle; }
   .pool-table tbody tr:nth-child(even) { background: var(--row-alt); }
   .pool-table .banner { width: 56px; height: 40px; object-fit: cover; border-radius: 4px; background: #e6eef3; display: block; }
-  .pool-table .slot-cell { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+  .slot-cell { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+  .slot-cell .controls { display: flex; gap: 4px; }
   .slot-badge { display: inline-block; min-width: 44px; text-align: center; font-weight: 700; font-size: 12px; padding: 3px 8px; border-radius: 6px; background: var(--blue-soft); color: var(--blue-dark); border: 1px solid var(--blue-line); }
-  .pool-table select.mod { padding: 3px 6px; font-weight: 700; }
-  .pool-table input.idbox { width: 96px; }
-  .pool-table input.idx { width: 34px; }
-  .pool-table input.stat { width: 48px; text-align: center; }
-  .pool-table input.skills, .pool-table input.notes { width: 100%; min-width: 110px; }
+  .pool-table select.mod { padding: 3px 4px; font-weight: 700; width: 58px; }
+  .pool-table input.idx { width: 38px; text-align: center; }
+  .pool-table input.idbox { width: 92px; }
+  .pool-table input.skills, .pool-table input.notes { width: 110px; }
   .pool-table input.skills { background: var(--amber-bg); border-color: var(--amber-line); color: var(--amber-ink); }
+  .pool-table td.num { text-align: center; white-space: nowrap; color: #4a555f; font-variant-numeric: tabular-nums; }
+  .map-info { min-width: 150px; }
   .map-info .t { font-weight: 700; }
   .map-info .a { color: var(--link); font-size: 12px; }
   .map-info .d { color: var(--muted); font-size: 12px; }
-  .sr { font-weight: 700; color: var(--blue-dark); white-space: nowrap; }
+  .map-info .status { font-size: 12px; color: var(--muted); }
+  .map-info .status.err { color: var(--red); }
+  .sr { font-weight: 700; color: var(--blue-dark); white-space: nowrap; text-align: center; }
 
   .card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 14px; margin-bottom: 10px; }
   .muted { color: var(--muted); font-size: 12px; }
@@ -96,6 +100,7 @@
 const MODS = ["NM","HD","HR","DT","FM","TB","EZ","FL"];
 let me = null, pool = { name: "Mappool", rounds: [] }, view = "viewer", activeRound = null, saveTimer = null;
 let sgStats = null;
+const rowStatus = {}; // sid -> { msg, err } transient fetch status, not persisted
 
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const uid = () => Math.random().toString(36).slice(2, 9);
@@ -228,26 +233,29 @@ function renderBuilder() {
     <th>SR</th><th>BPM</th><th>Length</th><th>CS</th><th>AR</th><th>OD</th><th>HP</th>
     <th>Skills</th><th>Comments</th><th>Actions</th></tr></thead><tbody>`;
   (round.slots||[]).forEach(s => {
+    const st = rowStatus[s._id];
+    const info = st
+      ? `<div class="status${st.err?' err':''}">${esc(st.msg)}</div>`
+      : `<div class="t">${esc(s.title||"—")}</div>${s.artist?`<div class="a">${esc(s.artist)}</div>`:""}${s.difficulty?`<div class="d">[${esc(s.difficulty)}]</div>`:""}`;
+    const num = v => (v != null && v !== "") ? esc(v) : "—";
     html += `<tr>
       <td><div class="slot-cell">
         <span class="slot-badge">${esc(s.mod)}${esc(s.index||"")}</span>
-        <select class="mod" onchange="onModChange('${s._id}',this.value)">${MODS.map(m=>`<option ${m===s.mod?'selected':''}>${m}</option>`).join("")}</select>
-        <input class="idx" value="${esc(s.index||"")}" placeholder="#" oninput="upd('${s._id}','index',this.value)">
-      </div></td>
-      <td><input class="idbox" value="${esc(s.beatmapId||"")}" placeholder="id or link" onchange="onIdInput('${s._id}',this.value)"></td>
+        <div class="controls">
+          <select class="mod" onchange="onModChange('${s._id}',this.value)">${MODS.map(m=>`<option ${m===s.mod?'selected':''}>${m}</option>`).join("")}</select>
+          <input class="idx" value="${esc(s.index||"")}" placeholder="#" oninput="upd('${s._id}','index',this.value)">
+        </div></div></td>
+      <td><input class="idbox" value="${esc(s.beatmapId||"")}" placeholder="id" onchange="onIdInput('${s._id}',this.value)"></td>
       <td>${s.beatmapsetId?`<img class="banner" src="${banner(s.beatmapsetId)}" onerror="this.style.visibility='hidden'" alt="">`:`<div class="banner"></div>`}</td>
-      <td class="map-info" style="min-width:170px">
-        <div class="t">${esc(s.title||"—")}</div>
-        ${s.artist?`<div class="a">${esc(s.artist)}</div>`:""}
-        ${s.difficulty?`<div class="d">[${esc(s.difficulty)}]</div>`:""}</td>
+      <td class="map-info">${info}</td>
       <td>${esc(s.mapper||"")}</td>
-      <td class="sr">${s.stars!=null&&s.stars!==""?"★"+esc(s.stars):""}</td>
-      <td><input class="stat" value="${esc(s.bpm ?? '')}" oninput="upd('${s._id}','bpm',this.value)"></td>
-      <td><input class="stat" value="${esc(s.length ?? '')}" oninput="upd('${s._id}','length',this.value)"></td>
-      <td><input class="stat" value="${esc(s.cs ?? '')}" oninput="upd('${s._id}','cs',this.value)"></td>
-      <td><input class="stat" value="${esc(s.ar ?? '')}" oninput="upd('${s._id}','ar',this.value)"></td>
-      <td><input class="stat" value="${esc(s.od ?? '')}" oninput="upd('${s._id}','od',this.value)"></td>
-      <td><input class="stat" value="${esc(s.hp ?? '')}" oninput="upd('${s._id}','hp',this.value)"></td>
+      <td class="sr">${s.stars!=null&&s.stars!==""?"★"+esc(s.stars):"—"}</td>
+      <td class="num">${num(s.bpm)}</td>
+      <td class="num">${num(s.length)}</td>
+      <td class="num">${num(s.cs)}</td>
+      <td class="num">${num(s.ar)}</td>
+      <td class="num">${num(s.od)}</td>
+      <td class="num">${num(s.hp)}</td>
       <td><input class="skills" value="${esc(s.skills||"")}" placeholder="Aim, Tech" oninput="upd('${s._id}','skills',this.value)"></td>
       <td><input class="notes" value="${esc(s.comment||"")}" placeholder="Notes…" oninput="upd('${s._id}','comment',this.value)"></td>
       <td style="white-space:nowrap">
@@ -256,7 +264,7 @@ function renderBuilder() {
   });
   html += `</tbody></table></div>
     <div class="row" style="margin-top:10px"><button class="btn" onclick="addSlot('${round.id}')">+ Add map</button>
-    <span class="muted">Enter a beatmap (difficulty) ID — banner and stats fill automatically and recalc when you change the mod. ★ SR and stats stay editable for manual overrides.</span></div>`;
+    <span class="muted">Enter a beatmap (difficulty) ID — the number after <code>#osu/</code> in the map URL. Banner and stats fill in automatically and recalc when you change the mod.</span></div>`;
   app.innerHTML = html;
 }
 function addRound() {
@@ -296,14 +304,15 @@ function onModChange(sid, v) {
 }
 async function fetchSlot(sid) {
   const s = findSlot(sid); if (!s) return;
-  if (!s.beatmapId) { alert("Enter a beatmap (difficulty) ID first."); return; }
-  const el = document.getElementById("savestate"); if (el) el.textContent = "Fetching…";
+  if (!s.beatmapId) { rowStatus[sid] = { msg: "Enter a beatmap ID first.", err: true }; renderBuilder(); return; }
+  rowStatus[sid] = { msg: "Fetching…", err: false }; renderBuilder();
   try {
     const d = await fetchStats(s.beatmapId, s.mod);
     Object.assign(s, { beatmapsetId: d.beatmapsetId, title: d.title, artist: d.artist, mapper: d.mapper,
       difficulty: d.difficulty, cs: d.cs, ar: d.ar, od: d.od, hp: d.hp, bpm: d.bpm, length: d.length, stars: d.stars });
+    delete rowStatus[sid];
     savePool(true); renderBuilder();
-  } catch (e) { if (el) el.textContent = "Fetch failed: " + e.message; }
+  } catch (e) { rowStatus[sid] = { msg: e.message, err: true }; renderBuilder(); }
 }
 
 /* ---------- SUGGESTIONS ---------- */
